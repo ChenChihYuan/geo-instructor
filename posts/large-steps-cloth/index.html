@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Large Steps in Cloth Simulation — Baraff & Witkin (1998)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+  </script>
+  <style>
+    .hero-visual { position:relative; height:360px; margin:32px 0; overflow:hidden; border-radius:var(--radius); background:var(--bg-card); border:1px solid var(--border); }
+    .hero-visual canvas { width:100%; height:100%; display:block; }
+    .scene-box { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin:32px 0; overflow:hidden; }
+    .scene-box canvas { width:100%; display:block; cursor:grab; }
+    .scene-box canvas:active { cursor:grabbing; }
+    .scene-caption { padding:16px 24px; font-size:0.82rem; color:var(--text-muted); font-style:italic; border-top:1px solid var(--border); }
+    .scene-controls { display:flex; gap:12px; justify-content:center; padding:12px 24px; border-top:1px solid var(--border); flex-wrap:wrap; }
+    .concept-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+    .concept-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; }
+    .concept-card h4 { color:var(--text); margin-bottom:8px; font-size:0.95rem; }
+    .concept-card p { font-size:0.85rem; color:var(--text-muted); margin:0; }
+    .concept-card .icon { font-size:2rem; margin-bottom:12px; }
+    @media (max-width:600px) { .concept-grid { grid-template-columns:1fr; } }
+    .timeline { position:relative; padding-left:36px; margin:24px 0; }
+    .timeline::before { content:''; position:absolute; left:12px; top:0; bottom:0; width:2px; background:var(--border); }
+    .timeline-item { position:relative; margin-bottom:24px; }
+    .timeline-item::before { content:''; position:absolute; left:-30px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--accent); border:2px solid var(--bg); }
+    .timeline-item h4 { color:var(--text); margin-bottom:4px; font-size:0.95rem; }
+    .timeline-item p { color:var(--text-muted); font-size:0.85rem; margin:0; }
+    .timeline-item .year { color:var(--accent); font-family:var(--font-mono); font-size:0.78rem; }
+    .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:24px 0; }
+    .stat-box { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; text-align:center; }
+    .stat-box .val { font-size:1.8rem; font-weight:800; color:var(--accent); font-family:var(--font-mono); }
+    .stat-box .label { font-size:0.78rem; color:var(--text-muted); margin-top:4px; }
+    @media (max-width:600px) { .stats-row { grid-template-columns:1fr; } }
+    .graph-box { border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin:28px 0; text-align:center; }
+    .graph-box canvas { display:block; margin:0 auto; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <nav class="site-nav">
+    <a href="../../index.html" class="logo">GEO-INSTRUCTOR</a>
+    <div class="nav-links">
+      <a href="../../index.html">[ WORK ]</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <h1>Large Steps in Cloth</h1>
+    <p class="subtitle">
+      In 1998, David Baraff and Andrew Witkin showed the world how to simulate cloth
+      without crawling through time one tiny step at a time.
+      Their key insight: use implicit integration to take steps 50× larger
+      than anyone thought possible. This paper changed everything.
+    </p>
+    <p class="meta pixel-label">JUNE 2025 · 18 min read</p>
+    <div class="tags">
+      <span class="tag">Cloth Simulation</span>
+      <span class="tag">Implicit Integration</span>
+      <span class="tag">SIGGRAPH 1998</span>
+      <span class="tag">Physics</span>
+      <span class="tag">Interactive</span>
+    </div>
+  </header>
+
+  <!-- ═══════ HERO: Cloth draping scene ═══════ -->
+  <div class="scene-box" id="heroSceneBox">
+    <canvas id="heroCanvas" style="height:360px;"></canvas>
+    <div class="scene-caption">A cloth sheet draping under gravity — the kind of scene Baraff & Witkin made practical. Before 1998, simulating this took hours. After their paper, minutes. Orbit to explore.</div>
+  </div>
+
+  <!-- ═══════ TABLE OF CONTENTS ═══════ -->
+  <nav class="toc">
+    <div class="toc-title">IN THIS ARTICLE</div>
+    <ol>
+      <li><a href="#problem">The bottleneck: tiny timesteps</a></li>
+      <li><a href="#explicit">Why explicit methods crawl</a></li>
+      <li><a href="#implicit">The implicit leap</a></li>
+      <li><a href="#forces">Cloth forces — stretch, shear, bend</a></li>
+      <li><a href="#system">The linear system</a></li>
+      <li><a href="#constraints">Constraints — pinning without cheating</a></li>
+      <li><a href="#demo-explicit">Interactive: explicit vs. implicit</a></li>
+      <li><a href="#demo-cloth">Interactive: mass-spring cloth</a></li>
+      <li><a href="#legacy">Why it matters — the legacy</a></li>
+      <li><a href="#reading">Further reading</a></li>
+    </ol>
+  </nav>
+
+  <article>
+
+    <!-- ═══════ SECTION 1: THE BOTTLENECK ═══════ -->
+    <h2 id="problem">The bottleneck: tiny timesteps</h2>
+    <p>
+      It's 1997. You want to animate a flag waving in the wind for a movie.
+      You set up your cloth simulator — a mesh of triangles, springs connecting vertices,
+      gravity pulling everything down. You hit "Run."
+    </p>
+    <p>
+      And you wait. And wait. And <em>wait</em>.
+    </p>
+    <p>
+      The problem isn't that cloth physics is complicated. The problem is that your simulator
+      is forced to take <strong>microscopic timesteps</strong>. A single second of animation
+      might require 10,000 steps. Each step solves forces, updates velocities, moves vertices.
+      At 10,000 steps per second of animation, a 30-second cloth sequence means 300,000 integration steps.
+    </p>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">THE BOTTLENECK</div>
+      <p>
+        Before 1998, cloth simulators used <strong>explicit integration</strong> (forward Euler, Runge-Kutta).
+        These methods are simple but demand tiny timesteps to stay stable.
+        Make the step too big and the simulation <em>explodes</em> — springs overshoot,
+        energy grows without bound, cloth flies apart.
+      </p>
+    </div>
+
+    <p>
+      Baraff and Witkin asked: what if instead of taking 10,000 tiny steps per second,
+      we could take <strong>30 large steps</strong>? Same physics, same result, 300× less work.
+    </p>
+
+    <!-- ═══════ SECTION 2: EXPLICIT METHODS ═══════ -->
+    <h2 id="explicit">Why explicit methods crawl</h2>
+    <p>
+      To understand the breakthrough, you need to understand the disease.
+      Let's start with the simplest possible "cloth" — a single mass on a spring.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">TOY MODEL</div>
+      <p>
+        A mass hangs from a spring. Gravity pulls it down. The spring pulls it back up.
+        The mass oscillates. This is the simplest dynamical system, and it already
+        contains the instability problem.
+      </p>
+    </div>
+
+    <p>
+      <strong>Forward Euler</strong> (explicit) works like this:
+    </p>
+    <pre>
+v_new = v_old + (F / m) * dt
+x_new = x_old + v_new * dt</pre>
+    <p>
+      Simple. Intuitive. You compute the force <em>now</em>, then step forward.
+      But there's a trap: if <code>dt</code> is too large relative to the spring's stiffness,
+      the mass overshoots the equilibrium point. Next step, the spring pulls it
+      back even harder. It overshoots further. Energy grows. The system explodes.
+    </p>
+
+    <p>
+      The stability limit for forward Euler on a spring with stiffness <code>k</code>
+      and mass <code>m</code> is:
+    </p>
+    <div class="equation">dt &lt; 2 · √(m / k)</div>
+    <p>
+      Cloth has springs with very different stiffnesses. Stretch resistance is high
+      (fabric doesn't stretch much). Bend resistance is low (fabric folds easily).
+      The <em>stiffest</em> spring dictates the timestep for the <em>entire</em> system.
+      A stiff stretch spring might force <code>dt</code> below 0.0001 seconds —
+      even though the bending motion could tolerate <code>dt = 0.01</code>.
+    </p>
+
+    <div class="concept-grid">
+      <div class="concept-card">
+        <div class="icon">💥</div>
+        <h4>The explosion</h4>
+        <p>Step too big → spring overshoots → energy grows → vertices fly to infinity. This is numerical instability, and it's the #1 enemy of cloth simulation.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🐌</div>
+        <h4>The crawl</h4>
+        <p>Step small enough → stable, but painfully slow. A 10-second cloth draping might take hours of compute. The stiffest spring holds the entire simulation hostage.</p>
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 3: IMPLICIT INTEGRATION ═══════ -->
+    <h2 id="implicit">The implicit leap</h2>
+    <p>
+      Baraff and Witkin's key idea: instead of computing forces at the <em>current</em>
+      position and stepping forward (explicit), compute forces at the <em>future</em>
+      position (implicit).
+    </p>
+
+    <p>
+      <strong>Backward Euler</strong> (implicit) says:
+    </p>
+    <pre>
+v_new = v_old + (F(x_new) / m) * dt
+x_new = x_old + v_new * dt</pre>
+    <p>
+      Wait — <code>F(x_new)</code> depends on <code>x_new</code>, which is what we're trying to compute!
+      This is a chicken-and-egg problem. To find the new position, we need the force
+      at the new position, but to compute that force, we need the new position.
+    </p>
+    <p>
+      The solution: <strong>linearize</strong>. Approximate the force at the new position
+      using a first-order Taylor expansion:
+    </p>
+    <div class="equation">F(x₀ + Δx) ≈ F(x₀) + (∂F/∂x) · Δx</div>
+    <p>
+      The term <code>∂F/∂x</code> is the <strong>Jacobian</strong> of the force — how the force
+      changes as position changes. For a spring, this is just the negative stiffness:
+      <code>∂F/∂x = −k</code>.
+    </p>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">THE KEY INSIGHT</div>
+      <p>
+        Implicit Euler turns the time-stepping problem into a <strong>linear system</strong>:
+      </p>
+      <div class="equation">(M − dt² · ∂F/∂x) · Δv = dt · F(x₀)</div>
+      <p style="margin-top:12px;">
+        This is <code>A · x = b</code>. Solving a linear system is more expensive per step
+        than forward Euler, but the system is <strong>unconditionally stable</strong> — you can
+        take timesteps 50× to 100× larger. The net speedup is enormous.
+      </p>
+    </div>
+
+    <p>
+      Why is it stable? Intuitively, because the force evaluation already "knows" about
+      the future. If the mass would overshoot, the linearized future force acts as a brake.
+      The stiffer the spring, the stronger the brake. Stiff springs, which were the
+      enemy of explicit methods, become <em>self-correcting</em> under implicit integration.
+    </p>
+
+    <div class="comparison">
+      <div>
+        <h4>Explicit (Forward Euler)</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          ✓ Simple to implement<br>
+          ✓ Cheap per step<br>
+          ✗ Tiny timesteps required<br>
+          ✗ Explodes if dt too large<br>
+          ✗ Stiff springs = very tiny dt
+        </p>
+      </div>
+      <div>
+        <h4>Implicit (Backward Euler)</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          ✓ Large timesteps OK<br>
+          ✓ Unconditionally stable<br>
+          ✓ Stiff springs are fine<br>
+          ✗ Requires solving a linear system<br>
+          ✗ Matrix assembly each step
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 4: CLOTH FORCES ═══════ -->
+    <h2 id="forces">Cloth forces — stretch, shear, bend</h2>
+    <p>
+      Baraff and Witkin model cloth as a triangle mesh. Each triangle resists three
+      kinds of deformation:
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-title">Stretch</div>
+        <p>Pulling the fabric along its warp or weft direction. Real cloth barely stretches — cotton extends less than 2% before tearing. The stretch condition measures how much each triangle has elongated relative to its rest shape. High stiffness here is what makes explicit methods suffer.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Shear</div>
+        <p>Distorting the fabric diagonally — turning a square into a parallelogram. The shear condition measures the angle change between the warp and weft directions within each triangle.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Bend</div>
+        <p>Folding along an edge shared by two triangles. The bend condition measures the dihedral angle between adjacent triangles. Bend stiffness is much lower than stretch — that's why cloth folds instead of stretching.</p>
+      </div>
+    </div>
+
+    <p>
+      Each condition produces a <strong>scalar energy</strong> that depends on vertex positions.
+      The force is the negative gradient: <code>F = −∂E/∂x</code>. The force Jacobian —
+      needed for implicit integration — is <code>∂F/∂x = −∂²E/∂x²</code>, the Hessian of the energy.
+    </p>
+    <p>
+      Baraff and Witkin derive these analytically using a continuum formulation based on
+      <strong>condition functions</strong> <code>C(x)</code>. The energy is <code>E = ½ k C(x)²</code>,
+      giving forces that are linear in the condition and Jacobians that are constant matrices
+      (for stretch/shear). This makes the linear system cheap to assemble.
+    </p>
+
+    <!-- ═══════ SECTION 5: THE LINEAR SYSTEM ═══════ -->
+    <h2 id="system">The linear system</h2>
+    <p>
+      At each timestep, the simulator assembles and solves:
+    </p>
+    <div class="equation">(M − dt · ∂f/∂v − dt² · ∂f/∂x) · Δv = dt · (f₀ + dt · (∂f/∂x) · v₀)</div>
+    <p>
+      Where <code>M</code> is the mass matrix (diagonal — each vertex has a mass),
+      <code>f₀</code> are forces at the current state, <code>∂f/∂x</code> and <code>∂f/∂v</code>
+      are force Jacobians with respect to position and velocity.
+    </p>
+    <p>
+      This is a <strong>sparse</strong> linear system. Each vertex only interacts with its
+      immediate neighbors through the triangle mesh. A cloth with 10,000 vertices produces
+      a 30,000 × 30,000 matrix (3 DOF per vertex), but it's mostly zeros.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">WHY CONJUGATE GRADIENT?</div>
+      <p>
+        Baraff and Witkin solve this system using the <strong>modified conjugate gradient (CG)</strong>
+        method. CG is iterative — it doesn't need the full matrix, just the ability to multiply
+        the matrix by a vector. For sparse systems, this is much cheaper than direct factorization.
+        They typically need only <strong>10–30 CG iterations</strong> per timestep.
+      </p>
+    </div>
+
+    <div class="arch-card">
+      <div class="num">1</div>
+      <div class="body">
+        <h4>Assemble forces f₀</h4>
+        <p>Loop over all triangles. Compute stretch, shear, bend conditions. Accumulate forces at each vertex.</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">2</div>
+      <div class="body">
+        <h4>Assemble Jacobians ∂f/∂x, ∂f/∂v</h4>
+        <p>For each triangle, compute the 9×9 (or 12×12 for bending) block of the Jacobian. Scatter into the global sparse matrix.</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">3</div>
+      <div class="body">
+        <h4>Build the system matrix A and right-hand side b</h4>
+        <p>A = M − dt·∂f/∂v − dt²·∂f/∂x. b = dt·(f₀ + dt·∂f/∂x·v₀). Both are sparse.</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">4</div>
+      <div class="body">
+        <h4>Solve A·Δv = b via modified CG</h4>
+        <p>10–30 iterations. Constraints are enforced within the CG loop by filtering the search direction (more on this below).</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">5</div>
+      <div class="body">
+        <h4>Update state</h4>
+        <p>v_new = v_old + Δv, x_new = x_old + dt·v_new. One large step, done.</p>
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 6: CONSTRAINTS ═══════ -->
+    <h2 id="constraints">Constraints — pinning without cheating</h2>
+    <p>
+      Cloth draping over a body needs some vertices <em>pinned</em> — fixed at a shoulder,
+      or constrained to slide along a surface. Traditional approaches apply massive
+      penalty springs to keep vertices in place. But penalty springs are stiff,
+      which defeats the purpose of implicit integration.
+    </p>
+    <p>
+      Baraff and Witkin embed constraints <em>directly into the CG solver</em>.
+      The idea is elegant: at each CG iteration, project the search direction
+      to zero out any motion along constrained directions. A pinned vertex
+      contributes zero to the velocity update, exactly, regardless of how many
+      CG iterations run.
+    </p>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">CONSTRAINT PROJECTION</div>
+      <p>
+        For each constrained particle <em>i</em>, define a projection matrix <code>Pᵢ</code>
+        that zeroes out the constrained components of velocity. During CG iteration,
+        filter: <code>z = P · r</code> (preconditioned residual) and <code>Δv = P · Δv</code>
+        (velocity update). The constraints are satisfied <strong>exactly</strong>, every iteration.
+      </p>
+    </div>
+
+    <p>
+      This is far more elegant than penalty springs. No extra stiffness in the system.
+      No fighting between constraint forces and cloth forces. The constraint is algebraic,
+      not physical.
+    </p>
+
+    <!-- ═══════ SECTION 7: DEMO — EXPLICIT VS IMPLICIT ═══════ -->
+    <h2 id="demo-explicit">Interactive: explicit vs. implicit</h2>
+    <p>
+      This demo shows the same spring-mass system integrated two ways.
+      <strong>Left</strong>: forward Euler (explicit). <strong>Right</strong>: backward Euler (implicit).
+      Both use the same stiffness and same timestep.
+    </p>
+    <p>
+      Increase the timestep with the slider and watch what happens. The explicit
+      integrator explodes. The implicit integrator stays stable — it might lose accuracy
+      (over-damp), but it <em>never</em> explodes.
+    </p>
+
+    <div class="graph-box">
+      <canvas id="integrationCanvas" width="700" height="350"></canvas>
+      <div style="display:flex;gap:12px;justify-content:center;padding:12px 0;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:0.85rem;">
+          Timestep (dt)
+          <input type="range" id="dtSlider" min="1" max="80" value="10" style="width:140px;">
+          <span id="dtVal" style="font-family:var(--font-mono);color:var(--accent);min-width:48px;">0.010</span>
+        </label>
+        <button class="btn primary" id="btnRestart">↺ Restart</button>
+      </div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-top:8px;">
+        <span style="color:#E74C3C;">●</span> Explicit (Forward Euler) &nbsp;&nbsp;
+        <span style="color:#3498DB;">●</span> Implicit (Backward Euler) &nbsp;&nbsp;
+        <span style="color:#7f8c8d;"> - - -</span> Equilibrium
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 8: DEMO — CLOTH ═══════ -->
+    <h2 id="demo-cloth">Interactive: mass-spring cloth</h2>
+    <p>
+      A simple mass-spring grid — a 2D cousin of what Baraff & Witkin simulated.
+      This demo uses explicit integration (Verlet), so it needs many sub-steps per frame.
+      Click <strong>Drop</strong> to release, <strong>Wind</strong> to add turbulence.
+    </p>
+    <p>
+      Notice: no collision detection. The cloth passes through itself. That's a separate
+      problem — one that took another 22 years to fully solve
+      (see <a href="../ppf-contact-solver/index.html">PPF Contact Solver</a>).
+    </p>
+
+    <div class="scene-box" id="clothSceneBox">
+      <canvas id="clothCanvas" style="height:400px;"></canvas>
+      <div class="scene-controls">
+        <button class="btn primary" id="btnClothDrop">▶ Drop</button>
+        <button class="btn" id="btnClothReset">↺ Reset</button>
+        <button class="btn" id="btnClothWind">💨 Wind</button>
+      </div>
+      <div class="scene-caption">
+        A 20×20 mass-spring cloth. Two corners pinned (Baraff & Witkin's constraint projection
+        would handle these elegantly). Structural + shear springs. Orbit to explore.
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 9: LEGACY ═══════ -->
+    <h2 id="legacy">Why it matters — the legacy</h2>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="val">1,187</div>
+        <div class="label">Citations</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">50–100×</div>
+        <div class="label">Larger timesteps</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">1998</div>
+        <div class="label">SIGGRAPH</div>
+      </div>
+    </div>
+
+    <p>
+      This paper didn't just make cloth simulation faster. It changed the culture
+      of physics simulation in graphics. Before Baraff & Witkin, most graphics
+      researchers avoided implicit methods — they seemed complicated, the matrix
+      assembly was daunting, and explicit methods were "good enough" for simple scenes.
+    </p>
+    <p>
+      After this paper, implicit integration became the <strong>default</strong>
+      for deformable simulation. Every modern cloth engine — from Pixar's Fizt (which
+      Baraff and Witkin themselves built) to Weta's tissue system to Houdini's Vellum —
+      traces its lineage back to this work.
+    </p>
+
+    <h3>The timeline: before and after</h3>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <span class="year">1987</span>
+        <h4>Terzopoulos et al. — Deformable models</h4>
+        <p>First physics-based cloth in graphics. Finite differences on a grid. Slow but groundbreaking.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">1992</span>
+        <h4>Carignan et al. — Garment simulation</h4>
+        <p>Cloth on virtual mannequins. Explicit integration. Small timesteps, limited to simple garments.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">1994</span>
+        <h4>Breen et al. — Particle-based draping</h4>
+        <p>Interacting particles model woven structure. Beautiful results, very slow.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">1998</span>
+        <h4>Baraff & Witkin — Large Steps ★</h4>
+        <p>Implicit integration + modified CG + constraint filtering. 50–100× speedup. The paper that made cloth practical for production.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2002</span>
+        <h4>Bridson et al. — Robust collision handling</h4>
+        <p>Added proper collision detection and response to implicit cloth. Combined with Baraff-Witkin, this became the standard pipeline.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2003–2010</span>
+        <h4>Production adoption</h4>
+        <p>Pixar (Fizt/Ariel), Weta, ILM all build implicit cloth solvers based on this foundation. Every movie with capes, dresses, or flags uses descendants of this paper.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2016</span>
+        <h4>Macklin et al. — XPBD</h4>
+        <p>Position-Based Dynamics with XPBD corrections brings implicit-like stability to real-time games. Different approach, same goal: large stable steps.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2020</span>
+        <h4>Li et al. — IPC</h4>
+        <p>Incremental Potential Contact: guaranteed penetration-free simulation. Builds on the implicit integration foundation Baraff & Witkin established.</p>
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 10: FURTHER READING ═══════ -->
+    <h2 id="reading">Further reading</h2>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-title">The paper</div>
+        <p><a href="https://www.cs.cmu.edu/~baraff/papers/sig98.pdf" target="_blank">Large Steps in Cloth Simulation</a> — David Baraff, Andrew Witkin, SIGGRAPH 1998. 12 pages that changed simulation.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">The supplemental notes</div>
+        <p><a href="https://www.cs.cmu.edu/~baraff/papers/cloth2003.pdf" target="_blank">Physically Based Modeling: Principles and Practice</a> — Baraff & Witkin's SIGGRAPH course notes. The extended version with full derivations.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Bridson's collision handling</div>
+        <p><a href="https://dl.acm.org/doi/10.1145/566654.566623" target="_blank">Robust Treatment of Collisions, Contact and Friction for Cloth Animation</a> — Robert Bridson et al., SIGGRAPH 2002. The companion paper that completed the picture.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">The next generation</div>
+        <p><a href="../ppf-contact-solver/index.html">Why Cloth Won't Cheat — PPF Contact Solver</a> — Our article on the 2024 engine that builds on this foundation with GPU-accelerated barrier functions.</p>
+      </div>
+    </div>
+
+  </article>
+
+  <footer>
+    <p>Geo-Instructor · Seeing the geometry beneath everything</p>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- SCRIPTS BELOW                                      -->
+<!-- ═══════════════════════════════════════════════════ -->
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+function initScene(canvasId, opts = {}) {
+  const canvas = document.getElementById(canvasId);
+  const box = canvas.parentElement;
+  const w = box.clientWidth;
+  const h = canvas.clientHeight || 360;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0xF4F2F0);
+  const camera = new THREE.PerspectiveCamera(opts.fov || 45, w / h, 0.1, 100);
+  camera.position.set(opts.cx || 0, opts.cy || 2, opts.cz || 5);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+  dir.position.set(3, 5, 4);
+  scene.add(dir);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+  window.addEventListener('resize', () => {
+    const w2 = box.clientWidth;
+    const h2 = canvas.clientHeight || h;
+    camera.aspect = w2 / h2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w2, h2);
+  });
+  return { renderer, camera, scene, controls, canvas };
+}
+
+/* ═══════ HERO: pre-draped cloth ═══════ */
+(function heroScene() {
+  const { renderer, camera, scene, controls } = initScene('heroCanvas', { cx: 0, cy: 1.8, cz: 4.5, fov: 50 });
+
+  // Ground
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xEDEAE7, roughness: 1 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.01;
+  scene.add(ground);
+  const grid = new THREE.GridHelper(8, 20, 0xD4D0CC, 0xD4D0CC);
+  grid.position.y = 0;
+  scene.add(grid);
+
+  // Sphere obstacle
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.6, 48, 48),
+    new THREE.MeshStandardMaterial({ color: 0x1A1AE5, roughness: 0.3, metalness: 0.1 })
+  );
+  sphere.position.y = 0.6;
+  scene.add(sphere);
+
+  // Pre-draped cloth
+  const N = 50;
+  const clothGeo = new THREE.PlaneGeometry(3, 3, N, N);
+  const pos = clothGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getY(i);
+    const dist = Math.sqrt(x * x + z * z);
+    const R = 0.6;
+    let y;
+    if (dist < R * 1.15) {
+      y = 0.6 + Math.sqrt(Math.max(0, R * R - dist * dist)) + 0.02;
+    } else {
+      const edge = 0.6 + Math.sqrt(Math.max(0, R * R - (R * 1.15) ** 2)) + 0.02;
+      y = edge - (dist - R * 1.15) * 0.75;
+      y = Math.max(0.01, y);
+    }
+    pos.setXYZ(i, x, y, z);
+  }
+  clothGeo.computeVertexNormals();
+  const cloth = new THREE.Mesh(clothGeo, new THREE.MeshStandardMaterial({
+    color: 0xC0392B, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.85
+  }));
+  scene.add(cloth);
+  scene.add(new THREE.LineSegments(
+    new THREE.WireframeGeometry(clothGeo),
+    new THREE.LineBasicMaterial({ color: 0xC0392B, opacity: 0.12, transparent: true })
+  ));
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+})();
+
+/* ═══════ CLOTH: mass-spring simulation ═══════ */
+(function clothScene() {
+  const { renderer, camera, scene, controls } = initScene('clothCanvas', { cx: 0, cy: 1.5, cz: 5, fov: 50 });
+
+  const N = 20, spacing = 0.12, damping = 0.98, gravity = -0.0015, stiffness = 0.4;
+  let windOn = false, running = false, particles, springs;
+
+  function createCloth() {
+    particles = []; springs = [];
+    for (let j = 0; j < N; j++)
+      for (let i = 0; i < N; i++)
+        particles.push({ x:(i-N/2)*spacing, y:2.0, z:(j-N/2)*spacing, vx:0, vy:0, vz:0,
+          pinned: (j===0 && (i===0 || i===N-1)) });
+    for (let j = 0; j < N; j++)
+      for (let i = 0; i < N; i++) {
+        const idx = j*N+i;
+        if (i<N-1) springs.push([idx, idx+1]);
+        if (j<N-1) springs.push([idx, idx+N]);
+        if (i<N-1 && j<N-1) { springs.push([idx, idx+N+1]); springs.push([idx+1, idx+N]); }
+      }
+    for (const s of springs) {
+      const a=particles[s[0]], b=particles[s[1]];
+      s[2] = Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2);
+    }
+  }
+  createCloth();
+
+  const clothGeo = new THREE.BufferGeometry();
+  const clothIdx = [];
+  for (let j=0;j<N-1;j++) for (let i=0;i<N-1;i++) { const a=j*N+i,b=a+1,c=a+N,d=c+1; clothIdx.push(a,c,b,b,c,d); }
+  clothGeo.setIndex(clothIdx);
+  const clothPos = new Float32Array(particles.length*3);
+  clothGeo.setAttribute('position', new THREE.BufferAttribute(clothPos,3));
+  const clothMesh = new THREE.Mesh(clothGeo, new THREE.MeshStandardMaterial({ color:0xC0392B, roughness:0.5, side:THREE.DoubleSide, flatShading:true }));
+  scene.add(clothMesh);
+  const wire = new THREE.LineSegments(new THREE.WireframeGeometry(clothGeo), new THREE.LineBasicMaterial({ color:0xC0392B, opacity:0.3, transparent:true }));
+  scene.add(wire);
+  scene.add(new THREE.GridHelper(6,16,0xD4D0CC,0xD4D0CC).translateY(-0.5));
+
+  function updateGeo() {
+    const p=clothGeo.attributes.position.array;
+    for (let i=0;i<particles.length;i++) { p[i*3]=particles[i].x; p[i*3+1]=particles[i].y; p[i*3+2]=particles[i].z; }
+    clothGeo.attributes.position.needsUpdate=true;
+    clothGeo.computeVertexNormals();
+    wire.geometry.dispose(); wire.geometry=new THREE.WireframeGeometry(clothGeo);
+  }
+  function step() {
+    for (const p of particles) { if(p.pinned)continue; p.vy+=gravity; if(windOn){p.vz+=(Math.random()-0.3)*0.0008; p.vx+=(Math.random()-0.5)*0.0004;} }
+    for (const [ai,bi,rest] of springs) {
+      const a=particles[ai],b=particles[bi];
+      const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+      const dist=Math.sqrt(dx*dx+dy*dy+dz*dz)||0.0001;
+      const f=(dist-rest)*stiffness, fx=(dx/dist)*f, fy=(dy/dist)*f, fz=(dz/dist)*f;
+      if(!a.pinned){a.vx+=fx;a.vy+=fy;a.vz+=fz;} if(!b.pinned){b.vx-=fx;b.vy-=fy;b.vz-=fz;}
+    }
+    for (const p of particles) { if(p.pinned)continue; p.vx*=damping;p.vy*=damping;p.vz*=damping; p.x+=p.vx;p.y+=p.vy;p.z+=p.vz; }
+  }
+  updateGeo();
+
+  document.getElementById('btnClothDrop').addEventListener('click', () => { running=true; });
+  document.getElementById('btnClothReset').addEventListener('click', () => { running=false; windOn=false; createCloth(); updateGeo(); });
+  document.getElementById('btnClothWind').addEventListener('click', () => { windOn=!windOn; });
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    if (running) { for(let i=0;i<8;i++) step(); updateGeo(); }
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+})();
+</script>
+
+<script>
+/* ═══════ Explicit vs Implicit integration demo ═══════ */
+(function integrationDemo() {
+  const canvas = document.getElementById('integrationCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = { l:60, r:30, t:30, b:50 };
+  const gw = W - pad.l - pad.r, gh = H - pad.t - pad.b;
+
+  const k = 200;      // spring stiffness
+  const m = 1;         // mass
+  const eq = 0;        // equilibrium position
+  const x0 = 1.0;     // initial displacement
+  let dt = 0.01;
+  const maxSteps = 600;
+
+  function simulate() {
+    // Explicit (Forward Euler)
+    const expl = [x0];
+    let ex = x0, ev = 0;
+    let exploded = false;
+    for (let i = 0; i < maxSteps; i++) {
+      const F = -k * ex;
+      ev = ev + (F / m) * dt;
+      ex = ex + ev * dt;
+      if (Math.abs(ex) > 50) { exploded = true; break; }
+      expl.push(ex);
+    }
+
+    // Implicit (Backward Euler): (m + dt^2*k) * dv = dt * (-k*x - dt*k*v)
+    // simplified: new_v = (m*v + dt*F) / (m + dt^2*k), new_x = x + dt*new_v
+    const impl = [x0];
+    let ix = x0, iv = 0;
+    for (let i = 0; i < maxSteps; i++) {
+      const F = -k * ix;
+      const denom = m + dt * dt * k;
+      const new_v = (m * iv + dt * F) / denom;
+      ix = ix + dt * new_v;
+      iv = new_v;
+      impl.push(ix);
+    }
+
+    return { expl, impl, exploded };
+  }
+
+  function draw() {
+    const { expl, impl, exploded } = simulate();
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#F4F2F0';
+    ctx.fillRect(0, 0, W, H);
+
+    // Axes
+    ctx.strokeStyle = '#2A2622';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t);
+    ctx.lineTo(pad.l, H - pad.b);
+    ctx.lineTo(W - pad.r, H - pad.b);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#8A857E';
+    ctx.font = '13px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('time (steps)', pad.l + gw/2, H - 10);
+    ctx.save();
+    ctx.translate(18, pad.t + gh/2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('position', 0, 0);
+    ctx.restore();
+
+    // Equilibrium line
+    const midY = pad.t + gh / 2;
+    ctx.strokeStyle = '#7f8c8d';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, midY);
+    ctx.lineTo(W - pad.r, midY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const yScale = gh / 4; // range -2..2
+    function toY(val) { return midY - val * yScale; }
+    function toX(i, len) { return pad.l + (i / (len - 1)) * gw; }
+
+    // Draw explicit
+    ctx.strokeStyle = '#E74C3C';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i < expl.length; i++) {
+      const x = toX(i, maxSteps);
+      const y = toY(Math.max(-2.5, Math.min(2.5, expl[i])));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    if (exploded) {
+      const lastX = toX(expl.length - 1, maxSteps);
+      ctx.fillStyle = '#E74C3C';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('💥 EXPLODED', lastX + 8, pad.t + 20);
+    }
+
+    // Draw implicit
+    ctx.strokeStyle = '#3498DB';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i < impl.length; i++) {
+      const x = toX(i, maxSteps);
+      const y = toY(Math.max(-2.5, Math.min(2.5, impl[i])));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  draw();
+
+  const slider = document.getElementById('dtSlider');
+  const valSpan = document.getElementById('dtVal');
+  slider.addEventListener('input', () => {
+    dt = parseInt(slider.value) / 1000;
+    valSpan.textContent = dt.toFixed(3);
+    draw();
+  });
+  document.getElementById('btnRestart').addEventListener('click', draw);
+})();
+</script>
+
+</body>
+</html>

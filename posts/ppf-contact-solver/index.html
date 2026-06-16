@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Why Cloth Won't Cheat — Inside ZOZO's PPF Contact Solver</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+  </script>
+  <style>
+    /* ── Post-specific ── */
+    .hero-visual { position:relative; height:360px; margin:32px 0; overflow:hidden; border-radius:var(--radius); background:var(--bg-card); border:1px solid var(--border); }
+    .hero-visual canvas { width:100%; height:100%; display:block; }
+
+    .scene-box { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin:32px 0; overflow:hidden; }
+    .scene-box canvas { width:100%; display:block; cursor:grab; }
+    .scene-box canvas:active { cursor:grabbing; }
+    .scene-caption { padding:16px 24px; font-size:0.82rem; color:var(--text-muted); font-style:italic; border-top:1px solid var(--border); }
+    .scene-controls { display:flex; gap:12px; justify-content:center; padding:12px 24px; border-top:1px solid var(--border); flex-wrap:wrap; }
+
+    .concept-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+    .concept-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; }
+    .concept-card h4 { color: var(--text); margin-bottom:8px; font-size:0.95rem; }
+    .concept-card p { font-size:0.85rem; color:var(--text-muted); margin:0; }
+    .concept-card .icon { font-size:2rem; margin-bottom:12px; }
+    @media (max-width:600px) { .concept-grid { grid-template-columns:1fr; } }
+
+    .timeline { position:relative; padding-left:36px; margin:24px 0; }
+    .timeline::before { content:''; position:absolute; left:12px; top:0; bottom:0; width:2px; background:var(--border); }
+    .timeline-item { position:relative; margin-bottom:24px; }
+    .timeline-item::before { content:''; position:absolute; left:-30px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--accent); border:2px solid var(--bg); }
+    .timeline-item h4 { color: var(--text); margin-bottom:4px; font-size:0.95rem; }
+    .timeline-item p { color:var(--text-muted); font-size:0.85rem; margin:0; }
+    .timeline-item .year { color:var(--accent); font-family:var(--font-mono); font-size:0.78rem; }
+
+    .barrier-graph { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin:24px 0; text-align:center; }
+    .barrier-graph canvas { display:block; margin:0 auto; }
+
+    .arch-card { display:flex; gap:20px; align-items:flex-start; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin:16px 0; }
+    .arch-card .num { flex-shrink:0; width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:linear-gradient(135deg, var(--accent), var(--accent2)); font-weight:700; color: var(--text); }
+    .arch-card .body h4 { color: var(--text); margin-bottom:6px; }
+    .arch-card .body p { color:var(--text-muted); font-size:0.85rem; margin:0; }
+    @media (max-width:600px) { .arch-card { flex-direction:column; } }
+
+    .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:24px 0; }
+    .stat-box { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; text-align:center; }
+    .stat-box .val { font-size:1.8rem; font-weight:800; color:var(--accent); font-family:var(--font-mono); }
+    .stat-box .label { font-size:0.78rem; color:var(--text-muted); margin-top:4px; }
+    @media (max-width:600px) { .stats-row { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <nav class="site-nav">
+    <a href="../../index.html" class="logo">GEO-INSTRUCTOR</a>
+    <div class="nav-links">
+      <a href="../../index.html">[ WORK ]</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <h1>Why Cloth Won't Cheat</h1>
+    <p class="subtitle">
+      Inside ZOZO's PPF Contact Solver — a SIGGRAPH Asia 2024 engine that simulates cloth, solids, and rods
+      without a single triangle ever passing through another. A beginner's guide to why that's hard, and how they solved it.
+    </p>
+    <p class="meta pixel-label">JUNE 2025 · 20 min read</p>
+    <div class="tags">
+      <span class="tag">Physics Simulation</span>
+      <span class="tag">Contact</span>
+      <span class="tag">FEM</span>
+      <span class="tag">GPU</span>
+      <span class="tag">Three.js</span>
+    </div>
+  </header>
+
+  <!-- ═══════ HERO: Draped cloth scene ═══════ -->
+  <div class="scene-box" id="heroSceneBox">
+    <canvas id="heroCanvas" style="height:360px;"></canvas>
+    <div class="scene-caption">A cloth sheet draping over a sphere — orbit to explore. This is the kind of scene PPF Contact Solver handles with guaranteed penetration-free contact.</div>
+  </div>
+
+  <!-- ═══════ TABLE OF CONTENTS ═══════ -->
+  <nav class="toc">
+    <div class="toc-title">IN THIS ARTICLE</div>
+    <ol>
+      <li><a href="#problem">The problem: things pass through things</a></li>
+      <li><a href="#why-hard">Why contact is the hardest part of simulation</a></li>
+      <li><a href="#barrier">Barrier functions — invisible force fields</a></li>
+      <li><a href="#cubic">The cubic barrier: PPF's key insight</a></li>
+      <li><a href="#fem">FEM in 30 seconds</a></li>
+      <li><a href="#architecture">How PPF puts it all together</a></li>
+      <li><a href="#demo-spring">Interactive: a mass-spring cloth</a></li>
+      <li><a href="#demo-collision">Interactive: barrier force field</a></li>
+      <li><a href="#scale">Why it matters: scale and results</a></li>
+      <li><a href="#reading">Further reading</a></li>
+    </ol>
+  </nav>
+
+  <article>
+
+    <!-- ═══════ SECTION 1: THE PROBLEM ═══════ -->
+    <h2 id="problem">The problem: things pass through things</h2>
+    <p>
+      Open any video game. Grab a character's arm and swing it into a wall.
+      Does the arm stop at the wall? Usually not. It <strong>clips right through</strong>.
+      The hand pokes out the other side. Players call it "clipping."
+      Developers call it "Tuesday."
+    </p>
+    <p>
+      In games, this is annoying but tolerable — you can fake your way past it with tricks.
+      But in <em>offline</em> simulation for movies, fashion, and engineering, clipping is catastrophic:
+    </p>
+    <div class="concept-grid">
+      <div class="concept-card">
+        <div class="icon">👗</div>
+        <h4>Virtual Fashion</h4>
+        <p>ZOZO (Japan's largest fashion e-commerce) needs cloth to drape realistically on virtual bodies. A sleeve that passes through a torso is useless.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🎬</div>
+        <h4>Movie VFX</h4>
+        <p>When a character's cape billows, every fold must be physically correct. Intersection artifacts are visible at cinema resolution.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🏗️</div>
+        <h4>Engineering</h4>
+        <p>Simulating crash tests, fabric draping over furniture, or cable routing — penetration means wrong physics and wrong answers.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🤖</div>
+        <h4>Robotics</h4>
+        <p>Training robots to fold laundry or grasp deformable objects requires contact that never cheats.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">THE CORE CHALLENGE</div>
+      <p>
+        How do you simulate thousands of triangles falling, folding, and tangling — and <strong>guarantee</strong>
+        that not a single triangle ever passes through another? That's the problem PPF Contact Solver solves.
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 2: WHY CONTACT IS HARD ═══════ -->
+    <h2 id="why-hard">Why contact is the hardest part of simulation</h2>
+    <p>
+      Simulating a bouncing ball is easy — it's just gravity and an elastic collision.
+      Simulating a <em>sheet of cloth</em> falling onto a pile of objects is a nightmare.
+      Here's why:
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-title">Collision detection at scale</div>
+        <p>A cloth with 10,000 triangles has <strong>~50 million</strong> possible triangle pairs to check. Every timestep. At 100 steps per second. That's 5 billion checks per second — and most are useless because the triangles are far apart.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Tunneling</div>
+        <p>If your timestep is too large, a fast-moving thin cloth can <em>teleport</em> through an object between frames. One frame it's above, next frame it's below — collision detection never saw the intersection. This is called <strong>tunneling</strong>.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Stacking and friction</div>
+        <p>When cloth folds on itself, you get layers resting on layers resting on layers. Each layer pushes the one below, which pushes the next. The contact forces form a coupled system — you can't solve them independently.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Thin shells have no volume</div>
+        <p>A cloth triangle has zero thickness. Two triangles occupying the same plane aren't "intersecting" in the normal sense. You need a concept of <em>distance between surfaces</em> even when the gap is sub-millimeter.</p>
+      </div>
+    </div>
+
+    <p>
+      Traditional approaches — penalty forces, constraint projection, impulse-based resolvers — all make compromises.
+      Penalty forces let things overlap a little. Impulses can create jitter. Constraint methods can fail when too many contacts activate at once.
+    </p>
+    <p>
+      The breakthrough came from a line of research called <strong>Incremental Potential Contact (IPC)</strong>, pioneered by
+      Li et al. in 2020. PPF Contact Solver builds on this foundation with a new, faster barrier function.
+    </p>
+
+    <!-- ═══════ SECTION 3: BARRIER FUNCTIONS ═══════ -->
+    <h2 id="barrier">Barrier functions — invisible force fields</h2>
+
+    <p>
+      Imagine you're walking toward a cliff edge. What stops you from falling off?
+      Fear — a <em>force</em> that grows stronger the closer you get to the edge.
+      At 10 meters, you barely notice. At 1 meter, you slow down. At 10 centimeters, you freeze.
+    </p>
+    <p>
+      A <strong>barrier function</strong> works the same way. It's a mathematical function that
+      creates an invisible force field around every surface. When two surfaces approach each other:
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">THE BARRIER IDEA</div>
+      <p>
+        The closer two surfaces get, the stronger the repulsive force.
+        The force becomes <strong>infinite</strong> at zero distance — making penetration
+        mathematically impossible. Not unlikely. <em>Impossible.</em>
+      </p>
+    </div>
+
+    <!-- ── Barrier function graph ── -->
+    <div class="barrier-graph">
+      <canvas id="barrierCanvas" width="700" height="320"></canvas>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-top:12px;">
+        Three barrier functions compared. As distance → 0, the barrier → ∞.
+        The <span style="color: #C0392B;">cubic barrier</span> (PPF's innovation) rises steeply
+        but stays smooth, making the solver faster and more stable.
+      </p>
+    </div>
+
+    <p>
+      The original IPC paper used a <strong>log barrier</strong> — the same kind used in
+      interior-point methods for optimization. It works, but it has a problem:
+      the stiffness (how hard the "force field" pushes) is separate from the material's
+      own elasticity. This means the barrier and the elastic forces fight each other,
+      requiring tiny timesteps to stay stable.
+    </p>
+
+    <!-- ═══════ SECTION 4: THE CUBIC BARRIER ═══════ -->
+    <h2 id="cubic">The cubic barrier: PPF's key insight</h2>
+
+    <p>
+      Ryoichi Ando's SIGGRAPH Asia 2024 paper — <em>"A Cubic Barrier with Elasticity-Inclusive Dynamic Stiffness"</em>
+      — introduces two innovations:
+    </p>
+
+    <div class="concept-grid">
+      <div class="concept-card">
+        <div class="icon">📐</div>
+        <h4>Cubic barrier shape</h4>
+        <p>Instead of a logarithmic curve, the barrier uses a <strong>cubic polynomial</strong>.
+           It's zero beyond a threshold distance d̂, rises as a smooth cubic as surfaces approach,
+           and still goes to infinity at zero distance. The cubic shape means simpler derivatives — faster to compute on GPU.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🔗</div>
+        <h4>Elasticity-inclusive stiffness</h4>
+        <p>The barrier's stiffness <strong>adapts to the material</strong>. Stiff steel gets a stiff barrier.
+           Soft silk gets a soft barrier. This eliminates the tug-of-war between contact forces and elastic forces,
+           allowing much larger timesteps.</p>
+      </div>
+    </div>
+
+    <p>
+      Think of it like this. The original IPC barrier is like putting the same steel bumper on
+      every car — a Smart car and a tank get the same bumper. PPF's barrier matches the bumper
+      to the car: a soft foam bumper for the Smart car, an armored plate for the tank.
+    </p>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">THE MATH (SIMPLIFIED)</div>
+      <p>The cubic barrier function looks like:</p>
+      <div class="equation">b(d) = (d − d̂)³ / d &nbsp;&nbsp;when d &lt; d̂, &nbsp;&nbsp;0 otherwise</div>
+      <p style="margin-top:12px;">
+        Where <code>d</code> is the distance between two surfaces and <code>d̂</code> is the activation threshold.
+        The key property: as d → 0, b(d) → ∞. Penetration requires infinite energy — it simply can't happen.
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 5: FEM IN 30 SECONDS ═══════ -->
+    <h2 id="fem">FEM in 30 seconds</h2>
+
+    <p>
+      PPF simulates materials using the <strong>Finite Element Method (FEM)</strong>.
+      If you've never heard of FEM, here's the 30-second version:
+    </p>
+
+    <!-- ── FEM mesh scene ── -->
+    <div class="scene-box" id="femSceneBox">
+      <canvas id="femCanvas" style="height:300px;"></canvas>
+      <div class="scene-caption">
+        A mesh of triangles. Each triangle is a "finite element" — a small patch of material
+        with known physics. FEM computes how each element deforms under forces, then stitches the results together.
+        Drag to orbit.
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-title">Divide the object into elements</div>
+        <p>A cloth becomes a mesh of triangles. A solid becomes a mesh of tetrahedra. Each element is a tiny piece of material with its own stress and strain.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Write physics equations for each element</div>
+        <p>Each triangle knows its rest shape. When it deforms, it resists — like a rubber band. The resistance follows a <em>constitutive model</em> (the "material law"). PPF uses a Neo-Hookean model for realistic nonlinear elasticity.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Assemble and solve</div>
+        <p>Stitch all the element equations into one giant system. Solve for the new positions of every vertex. This is where the GPU shines — the system is sparse and highly parallelizable.</p>
+      </div>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">KEY INSIGHT</div>
+      <p>
+        PPF computes <strong>symbolic force Jacobians</strong> — the derivatives of forces
+        with respect to positions are derived analytically, not numerically approximated.
+        This gives exact gradients, which makes the Newton solver converge in fewer iterations.
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 6: ARCHITECTURE ═══════ -->
+    <h2 id="architecture">How PPF puts it all together</h2>
+
+    <p>
+      Here's the simulation loop that runs every timestep. Each component is
+      massively parallel on the GPU:
+    </p>
+
+    <div class="arch-card">
+      <div class="num">1</div>
+      <div class="body">
+        <h4>Broad-phase collision detection</h4>
+        <p>Using spatial hashing on the GPU, quickly find pairs of triangles that <em>might</em> be close. This prunes billions of impossible pairs down to thousands of candidates.</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">2</div>
+      <div class="body">
+        <h4>Narrow-phase distance computation</h4>
+        <p>For each candidate pair, compute the exact distance between the triangle surfaces. PPF handles point-triangle, edge-edge, and point-edge distances.</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">3</div>
+      <div class="body">
+        <h4>Barrier energy + Elastic energy</h4>
+        <p>Sum up: (a) the cubic barrier energy from all close contacts, and (b) the FEM elastic energy from all deformed triangles. The total is one big energy function.</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">4</div>
+      <div class="body">
+        <h4>Newton's method</h4>
+        <p>Minimize the total energy using Newton's method with line search. The Jacobians are exact (symbolic), so convergence is fast. The line search includes a <strong>continuous collision detection (CCD)</strong> check to ensure no triangle tunnels through another during the step.</p>
+      </div>
+    </div>
+    <div class="arch-card">
+      <div class="num">5</div>
+      <div class="body">
+        <h4>Strain limiting</h4>
+        <p>After the solve, check that no triangle has stretched beyond a configurable bound (e.g., 1%). If it has, project it back. This keeps cloth from turning into silly putty.</p>
+      </div>
+    </div>
+
+    <p>
+      The entire pipeline runs in <strong>single precision (FP32)</strong> on the GPU.
+      No double precision needed — the cubic barrier's smooth derivatives keep things
+      numerically stable even in 32-bit float.
+    </p>
+
+    <!-- ═══════ SECTION 7: INTERACTIVE SPRING-MASS ═══════ -->
+    <h2 id="demo-spring">Interactive: a mass-spring cloth</h2>
+    <p>
+      Let's build intuition for cloth simulation. Below is a simple mass-spring grid — the
+      predecessor to FEM cloth. Each vertex is a mass connected to its neighbors by springs.
+      Gravity pulls it down. The springs resist stretching.
+    </p>
+    <p>
+      Click <strong>Drop</strong> to release the cloth. Click <strong>Reset</strong> to start over.
+      Drag to orbit the camera.
+    </p>
+
+    <div class="scene-box" id="springSceneBox">
+      <canvas id="springCanvas" style="height:400px;"></canvas>
+      <div class="scene-controls">
+        <button class="btn primary" id="btnDrop">▶ Drop</button>
+        <button class="btn" id="btnReset">↺ Reset</button>
+        <button class="btn" id="btnWind">💨 Wind</button>
+      </div>
+      <div class="scene-caption">
+        A 20×20 mass-spring cloth. Two corners are pinned. Springs resist stretching (structural)
+        and shearing (diagonal). Notice how it folds and drapes — but there's no collision detection,
+        so it passes right through itself. That's what PPF fixes.
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 8: BARRIER FORCE DEMO ═══════ -->
+    <h2 id="demo-collision">Interactive: barrier force field</h2>
+    <p>
+      This demo shows the barrier function in action. A ball sits at the center.
+      Small particles fall under gravity. When they get close to the ball,
+      the barrier force pushes them away — <strong>no particle ever enters the ball</strong>.
+    </p>
+    <p>
+      Drag the <strong>Stiffness</strong> slider to feel the difference between a soft and hard barrier.
+      Higher stiffness = particles bounce off at a greater distance.
+    </p>
+
+    <div class="scene-box" id="barrierSceneBox">
+      <canvas id="barrierSceneCanvas" style="height:400px;"></canvas>
+      <div class="scene-controls">
+        <button class="btn primary" id="btnSpawn">🌧️ Rain Particles</button>
+        <button class="btn" id="btnClearParticles">Clear</button>
+        <label style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:0.85rem;">
+          Stiffness
+          <input type="range" id="stiffnessSlider" min="1" max="100" value="30" style="width:120px;">
+          <span id="stiffnessVal" style="font-family:var(--font-mono);color:var(--accent);min-width:32px;">30</span>
+        </label>
+      </div>
+      <div class="scene-caption">
+        The barrier function creates an invisible force field around the sphere.
+        Particles never penetrate — they slide along the surface. This is the core idea behind PPF's contact resolution.
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 9: SCALE & RESULTS ═══════ -->
+    <h2 id="scale">Why it matters: scale and results</h2>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="val">180M+</div>
+        <div class="label">Contacts handled</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">FP32</div>
+        <div class="label">Single precision GPU</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">0%</div>
+        <div class="label">Penetrations allowed</div>
+      </div>
+    </div>
+
+    <p>
+      PPF Contact Solver isn't a toy demo. It's a production engine that handles
+      scenarios most solvers choke on:
+    </p>
+
+    <div class="concept-grid">
+      <div class="concept-card">
+        <h4>🪢 Twisted ropes</h4>
+        <p>Rod-rod contact with hundreds of self-contacts per frame. Ropes that knot, tangle, and untangle.</p>
+      </div>
+      <div class="concept-card">
+        <h4>👚 Layered garments</h4>
+        <p>Multiple cloth layers (shirt, jacket, scarf) interacting simultaneously. Each layer contacts the body and every other layer.</p>
+      </div>
+      <div class="concept-card">
+        <h4>🪵 Solid-cloth coupling</h4>
+        <p>Rigid or deformable solid objects interacting with thin shells. Buttons through buttonholes, zippers, clasps.</p>
+      </div>
+      <div class="concept-card">
+        <h4>📐 Strict strain limits</h4>
+        <p>Triangles never stretch beyond 1%. Real fabric doesn't stretch like rubber — PPF enforces this strictly.</p>
+      </div>
+    </div>
+
+    <h3>The history: how we got here</h3>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <span class="year">1998</span>
+        <h4>Baraff & Witkin — Implicit cloth</h4>
+        <p>The paper that made cloth simulation practical. Implicit integration allowed large timesteps. But contact handling was ad-hoc.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2002–2012</span>
+        <h4>Penalty forces & impulse methods</h4>
+        <p>Approximate contact by adding spring-like penalty forces when things get close. Fast but leaky — things still penetrate if forces aren't strong enough.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2020</span>
+        <h4>IPC — Incremental Potential Contact</h4>
+        <p>Li et al. introduce the barrier function approach. Penetration-free guarantee. Game changer — but slow for stiff materials due to barrier-elasticity conflict.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2024</span>
+        <h4>PPF — Cubic Barrier (Ando, SIGGRAPH Asia)</h4>
+        <p>Elasticity-inclusive stiffness eliminates the barrier-elasticity conflict. Cubic shape is GPU-friendly. Handles 180M+ contacts. Open-sourced by ZOZO.</p>
+      </div>
+    </div>
+
+    <!-- ═══════ SECTION 10: FURTHER READING ═══════ -->
+    <h2 id="reading">Further reading</h2>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-title">The paper</div>
+        <p><a href="https://dl.acm.org/doi/abs/10.1145/3687908" target="_blank">A Cubic Barrier with Elasticity-Inclusive Dynamic Stiffness</a> — Ryoichi Ando, ACM Transactions on Graphics (SIGGRAPH Asia) 2024.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">The code</div>
+        <p><a href="https://github.com/st-tech/ppf-contact-solver" target="_blank">st-tech/ppf-contact-solver</a> on GitHub. Apache 2.0 license. Python + Rust + CUDA. Docker image, Windows executable, Blender add-on.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">IPC Toolkit</div>
+        <p><a href="https://ipctk.xyz" target="_blank">ipctk.xyz</a> — The reference implementation for the original IPC method. C++ with Python bindings. Great for understanding the foundation PPF builds on.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Author</div>
+        <p><a href="https://ryichando.graphics/" target="_blank">Ryoichi Ando</a> — researcher at ZOZO, with work spanning fluid simulation, cloth, and contact mechanics.</p>
+      </div>
+    </div>
+
+  </article>
+
+  <footer>
+    <p>Geo-Instructor · Seeing the geometry beneath everything</p>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- THREE.JS SCENES                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ── Helper: set up a scene/camera/renderer for a canvas ── */
+function initScene(canvasId, opts = {}) {
+  const canvas = document.getElementById(canvasId);
+  const box = canvas.parentElement;
+  const w = box.clientWidth;
+  const h = canvas.clientHeight || 360;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0xF4F2F0);
+
+  const camera = new THREE.PerspectiveCamera(opts.fov || 45, w / h, 0.1, 100);
+  camera.position.set(opts.cx || 0, opts.cy || 2, opts.cz || 5);
+
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+  dir.position.set(3, 5, 4);
+  scene.add(dir);
+
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+
+  window.addEventListener('resize', () => {
+    const w2 = box.clientWidth;
+    const h2 = canvas.clientHeight || h;
+    camera.aspect = w2 / h2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w2, h2);
+  });
+
+  return { renderer, camera, scene, controls, canvas };
+}
+
+/* ═══════════════════════════════════════════════ */
+/* SCENE 1: Hero — cloth draped over sphere       */
+/* ═══════════════════════════════════════════════ */
+(function heroScene() {
+  const { renderer, camera, scene, controls } = initScene('heroCanvas', { cx: 0, cy: 1.5, cz: 4, fov: 50 });
+
+  // Sphere
+  const sphereGeo = new THREE.SphereGeometry(0.7, 48, 48);
+  const sphereMat = new THREE.MeshStandardMaterial({ color: 0x1A1AE5, roughness: 0.3, metalness: 0.1 });
+  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+  sphere.position.y = 0.7;
+  scene.add(sphere);
+
+  // Cloth (pre-draped shape using parametric deformation)
+  const clothRes = 60;
+  const clothGeo = new THREE.PlaneGeometry(3, 3, clothRes, clothRes);
+  const pos = clothGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getY(i); // PlaneGeometry Y → our Z
+    const dist = Math.sqrt(x * x + z * z);
+    const R = 0.7;
+    let y;
+    if (dist < R * 1.2) {
+      // On the sphere
+      const lift = Math.sqrt(Math.max(0, R * R - dist * dist));
+      y = 0.7 + lift + 0.02;
+    } else {
+      // Draping down
+      const drape = Math.max(0, (dist - R * 1.2)) * 0.8;
+      const sphereEdgeY = 0.7 + Math.sqrt(Math.max(0, R * R - (R * 1.2) * (R * 1.2))) + 0.02;
+      y = sphereEdgeY - drape;
+      y = Math.max(-0.3, y);
+    }
+    pos.setXYZ(i, x, y, z);
+  }
+  clothGeo.computeVertexNormals();
+  const clothMat = new THREE.MeshStandardMaterial({
+    color: 0xC0392B, roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.85
+  });
+  const cloth = new THREE.Mesh(clothGeo, clothMat);
+  scene.add(cloth);
+
+  // Wireframe overlay
+  const wire = new THREE.LineSegments(
+    new THREE.WireframeGeometry(clothGeo),
+    new THREE.LineBasicMaterial({ color: 0xC0392B, opacity: 0.15, transparent: true })
+  );
+  scene.add(wire);
+
+  // Ground plane
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xEDEAE7, roughness: 1 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.31;
+  scene.add(ground);
+
+  // Grid
+  const grid = new THREE.GridHelper(8, 20, 0xD4D0CC, 0xD4D0CC);
+  grid.position.y = -0.3;
+  scene.add(grid);
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+
+/* ═══════════════════════════════════════════════ */
+/* SCENE 2: FEM mesh visualization                */
+/* ═══════════════════════════════════════════════ */
+(function femScene() {
+  const { renderer, camera, scene, controls } = initScene('femCanvas', { cx: 0, cy: 1.2, cz: 3.5, fov: 45 });
+
+  // Create a subdivided plane to show triangulation
+  const geo = new THREE.PlaneGeometry(2.5, 2.5, 12, 12);
+  const pos = geo.attributes.position;
+  // Warp it slightly to show deformation
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = 0.15 * Math.sin(x * 2) * Math.cos(y * 2);
+    pos.setZ(i, z);
+  }
+  geo.computeVertexNormals();
+
+  // Solid mesh with per-face coloring to highlight elements
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x1A1AE5, roughness: 0.5, side: THREE.DoubleSide, transparent: true, opacity: 0.6, flatShading: true
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 3;
+  mesh.position.y = 0.5;
+  scene.add(mesh);
+
+  // Wireframe to show elements
+  const wireGeo = new THREE.WireframeGeometry(geo);
+  const wireMat = new THREE.LineBasicMaterial({ color: 0x1A1AE5, opacity: 0.8, transparent: true });
+  const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+  wireframe.rotation.x = -Math.PI / 3;
+  wireframe.position.y = 0.5;
+  scene.add(wireframe);
+
+  // Vertices as dots
+  const dotGeo = new THREE.BufferGeometry();
+  const dotPos = [];
+  for (let i = 0; i < pos.count; i++) {
+    dotPos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+  }
+  dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotPos, 3));
+  const dotMat = new THREE.PointsMaterial({ color: 0x2A2622, size: 4, sizeAttenuation: false });
+  const dots = new THREE.Points(dotGeo, dotMat);
+  dots.rotation.x = -Math.PI / 3;
+  dots.position.y = 0.5;
+  scene.add(dots);
+
+  // Highlight one triangle
+  const triGeo = new THREE.BufferGeometry();
+  const idx = geo.index.array;
+  const triVerts = [];
+  for (let k = 0; k < 3; k++) {
+    const i = idx[k];
+    triVerts.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+  }
+  triGeo.setAttribute('position', new THREE.Float32BufferAttribute(triVerts, 3));
+  const triMat = new THREE.MeshBasicMaterial({ color: 0xD35400, side: THREE.DoubleSide, transparent: true, opacity: 0.7 });
+  const triMesh = new THREE.Mesh(triGeo, triMat);
+  triMesh.rotation.x = -Math.PI / 3;
+  triMesh.position.y = 0.5;
+  scene.add(triMesh);
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+
+/* ═══════════════════════════════════════════════ */
+/* SCENE 3: Mass-spring cloth simulation          */
+/* ═══════════════════════════════════════════════ */
+(function springScene() {
+  const { renderer, camera, scene, controls } = initScene('springCanvas', { cx: 0, cy: 1.5, cz: 5, fov: 50 });
+
+  const N = 20; // grid size
+  const spacing = 0.12;
+  const damping = 0.98;
+  const gravity = -0.0015;
+  const stiffness = 0.4;
+  let windOn = false;
+  let running = false;
+
+  // Particle state
+  let particles, springs;
+
+  function createCloth() {
+    particles = [];
+    springs = [];
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        particles.push({
+          x: (i - N / 2) * spacing,
+          y: 2.0,
+          z: (j - N / 2) * spacing,
+          vx: 0, vy: 0, vz: 0,
+          pinned: (j === 0 && (i === 0 || i === N - 1))
+        });
+      }
+    }
+    // Structural + shear springs
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const idx = j * N + i;
+        if (i < N - 1) springs.push([idx, idx + 1]);
+        if (j < N - 1) springs.push([idx, idx + N]);
+        if (i < N - 1 && j < N - 1) {
+          springs.push([idx, idx + N + 1]);
+          springs.push([idx + 1, idx + N]);
+        }
+      }
+    }
+    // Rest lengths
+    for (const s of springs) {
+      const a = particles[s[0]], b = particles[s[1]];
+      s[2] = Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
+    }
+  }
+  createCloth();
+
+  // Three.js mesh for cloth
+  const clothGeo = new THREE.BufferGeometry();
+  const clothIndices = [];
+  for (let j = 0; j < N - 1; j++) {
+    for (let i = 0; i < N - 1; i++) {
+      const a = j * N + i, b = a + 1, c = a + N, d = c + 1;
+      clothIndices.push(a, c, b, b, c, d);
+    }
+  }
+  clothGeo.setIndex(clothIndices);
+  const clothPositions = new Float32Array(particles.length * 3);
+  clothGeo.setAttribute('position', new THREE.BufferAttribute(clothPositions, 3));
+
+  const clothMat = new THREE.MeshStandardMaterial({
+    color: 0xC0392B, roughness: 0.5, side: THREE.DoubleSide, flatShading: true
+  });
+  const clothMesh = new THREE.Mesh(clothGeo, clothMat);
+  scene.add(clothMesh);
+
+  // Wireframe
+  const wireGeo2 = new THREE.WireframeGeometry(clothGeo);
+  const wireMat2 = new THREE.LineBasicMaterial({ color: 0xC0392B, opacity: 0.3, transparent: true });
+  const wireframe2 = new THREE.LineSegments(wireGeo2, wireMat2);
+  scene.add(wireframe2);
+
+  // Grid
+  const grid = new THREE.GridHelper(6, 16, 0xD4D0CC, 0xD4D0CC);
+  grid.position.y = -0.5;
+  scene.add(grid);
+
+  function updateGeo() {
+    const pos = clothGeo.attributes.position.array;
+    for (let i = 0; i < particles.length; i++) {
+      pos[i * 3] = particles[i].x;
+      pos[i * 3 + 1] = particles[i].y;
+      pos[i * 3 + 2] = particles[i].z;
+    }
+    clothGeo.attributes.position.needsUpdate = true;
+    clothGeo.computeVertexNormals();
+    // Update wireframe
+    wireframe2.geometry.dispose();
+    wireframe2.geometry = new THREE.WireframeGeometry(clothGeo);
+  }
+
+  function step() {
+    // Apply gravity
+    for (const p of particles) {
+      if (p.pinned) continue;
+      p.vy += gravity;
+      if (windOn) {
+        p.vz += (Math.random() - 0.3) * 0.0008;
+        p.vx += (Math.random() - 0.5) * 0.0004;
+      }
+    }
+    // Spring forces
+    for (const [ai, bi, rest] of springs) {
+      const a = particles[ai], b = particles[bi];
+      const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.0001;
+      const force = (dist - rest) * stiffness;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      const fz = (dz / dist) * force;
+      if (!a.pinned) { a.vx += fx; a.vy += fy; a.vz += fz; }
+      if (!b.pinned) { b.vx -= fx; b.vy -= fy; b.vz -= fz; }
+    }
+    // Integrate
+    for (const p of particles) {
+      if (p.pinned) continue;
+      p.vx *= damping; p.vy *= damping; p.vz *= damping;
+      p.x += p.vx; p.y += p.vy; p.z += p.vz;
+    }
+  }
+
+  updateGeo();
+
+  document.getElementById('btnDrop').addEventListener('click', () => { running = true; });
+  document.getElementById('btnReset').addEventListener('click', () => {
+    running = false; windOn = false;
+    createCloth(); updateGeo();
+  });
+  document.getElementById('btnWind').addEventListener('click', () => { windOn = !windOn; });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    if (running) {
+      for (let i = 0; i < 8; i++) step();
+      updateGeo();
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+
+/* ═══════════════════════════════════════════════ */
+/* SCENE 4: Barrier force field demo              */
+/* ═══════════════════════════════════════════════ */
+(function barrierScene() {
+  const { renderer, camera, scene, controls } = initScene('barrierSceneCanvas', { cx: 0, cy: 2, cz: 5, fov: 50 });
+
+  // Central sphere (obstacle)
+  const sphereGeo = new THREE.SphereGeometry(0.6, 32, 32);
+  const sphereMat = new THREE.MeshStandardMaterial({ color: 0x1A1AE5, roughness: 0.3, transparent: true, opacity: 0.7 });
+  const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+  sphere.position.y = 0.6;
+  scene.add(sphere);
+
+  // Barrier radius ring
+  const ringGeo = new THREE.RingGeometry(0.9, 0.92, 64);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0x2D6A4F, side: THREE.DoubleSide, transparent: true, opacity: 0.4 });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.6;
+  scene.add(ring);
+
+  // Grid floor
+  const grid = new THREE.GridHelper(6, 16, 0xD4D0CC, 0xD4D0CC);
+  grid.position.y = -0.3;
+  scene.add(grid);
+
+  // Particles
+  const particles = [];
+  const particleGeo = new THREE.SphereGeometry(0.04, 8, 8);
+  const particleMat = new THREE.MeshStandardMaterial({ color: 0xD35400 });
+  const sphereCenter = new THREE.Vector3(0, 0.6, 0);
+  const sphereR = 0.6;
+  let barrierStiffness = 30;
+  const dHat = 0.35; // barrier activation distance
+
+  function spawnParticle() {
+    const mesh = new THREE.Mesh(particleGeo, particleMat.clone());
+    mesh.position.set(
+      (Math.random() - 0.5) * 3,
+      3 + Math.random() * 2,
+      (Math.random() - 0.5) * 3
+    );
+    scene.add(mesh);
+    particles.push({ mesh, vx: 0, vy: 0, vz: 0 });
+  }
+
+  function spawnBatch() {
+    for (let i = 0; i < 30; i++) spawnParticle();
+  }
+
+  document.getElementById('btnSpawn').addEventListener('click', spawnBatch);
+  document.getElementById('btnClearParticles').addEventListener('click', () => {
+    for (const p of particles) scene.remove(p.mesh);
+    particles.length = 0;
+  });
+
+  const slider = document.getElementById('stiffnessSlider');
+  const sliderVal = document.getElementById('stiffnessVal');
+  slider.addEventListener('input', () => {
+    barrierStiffness = parseInt(slider.value);
+    sliderVal.textContent = slider.value;
+  });
+
+  // Spawn initial batch
+  spawnBatch();
+
+  function stepParticles() {
+    const grav = -0.003;
+    const damp = 0.97;
+    const floor = -0.25;
+
+    for (const p of particles) {
+      p.vy += grav;
+
+      // Barrier force from sphere
+      const dx = p.mesh.position.x - sphereCenter.x;
+      const dy = p.mesh.position.y - sphereCenter.y;
+      const dz = p.mesh.position.z - sphereCenter.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const gap = dist - sphereR;
+
+      if (gap < dHat && gap > 0.001) {
+        // Cubic barrier force: -dB/dd = -3(d-dHat)²/d + (d-dHat)³/d²
+        // Simplified: repulsive force proportional to (1 - gap/dHat)²
+        const ratio = 1 - gap / dHat;
+        const force = barrierStiffness * 0.002 * ratio * ratio;
+        const nx = dx / dist, ny = dy / dist, nz = dz / dist;
+        p.vx += nx * force;
+        p.vy += ny * force;
+        p.vz += nz * force;
+      } else if (gap <= 0.001) {
+        // Hard clamp — push out
+        const nx = dx / dist, ny = dy / dist, nz = dz / dist;
+        p.mesh.position.x = sphereCenter.x + nx * (sphereR + 0.01);
+        p.mesh.position.y = sphereCenter.y + ny * (sphereR + 0.01);
+        p.mesh.position.z = sphereCenter.z + nz * (sphereR + 0.01);
+        // Reflect velocity
+        const dot = p.vx * nx + p.vy * ny + p.vz * nz;
+        p.vx -= 2 * dot * nx; p.vy -= 2 * dot * ny; p.vz -= 2 * dot * nz;
+        p.vx *= 0.3; p.vy *= 0.3; p.vz *= 0.3;
+      }
+
+      // Floor collision
+      if (p.mesh.position.y < floor) {
+        p.mesh.position.y = floor;
+        p.vy = Math.abs(p.vy) * 0.3;
+        p.vx *= 0.9; p.vz *= 0.9;
+      }
+
+      p.vx *= damp; p.vy *= damp; p.vz *= damp;
+      p.mesh.position.x += p.vx;
+      p.mesh.position.y += p.vy;
+      p.mesh.position.z += p.vz;
+
+      // Color by proximity to sphere
+      const g2 = p.mesh.position.distanceTo(sphereCenter) - sphereR;
+      if (g2 < dHat) {
+        const t = 1 - g2 / dHat;
+        p.mesh.material.color.setRGB(1, 0.5 * (1 - t), 0.15 * (1 - t));
+      } else {
+        p.mesh.material.color.setHex(0xD35400);
+      }
+    }
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    for (let i = 0; i < 4; i++) stepParticles();
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+
+</script>
+
+<!-- ═══════ 2D Barrier function graph (vanilla Canvas) ═══════ -->
+<script>
+(function drawBarrierGraph() {
+  const canvas = document.getElementById('barrierCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = { l: 60, r: 30, t: 30, b: 50 };
+  const gw = W - pad.l - pad.r, gh = H - pad.t - pad.b;
+
+  ctx.fillStyle = 'var(--bg-card)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Axes
+  ctx.strokeStyle = '#2a2f3e';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t);
+  ctx.lineTo(pad.l, H - pad.b);
+  ctx.lineTo(W - pad.r, H - pad.b);
+  ctx.stroke();
+
+  // Labels
+  ctx.fillStyle = '#7a8194';
+  ctx.font = '13px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('distance (d)', pad.l + gw / 2, H - 10);
+  ctx.save();
+  ctx.translate(18, pad.t + gh / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('barrier energy b(d)', 0, 0);
+  ctx.restore();
+
+  // d̂ marker
+  const dHat = 0.6;
+  const dHatX = pad.l + (dHat / 1.0) * gw;
+  ctx.strokeStyle = 'var(--border)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(dHatX, pad.t);
+  ctx.lineTo(dHatX, H - pad.b);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#7a8194';
+  ctx.fillText('d̂', dHatX, H - pad.b + 18);
+  ctx.fillText('0', pad.l, H - pad.b + 18);
+
+  // Barrier functions
+  const curves = [
+    { name: 'Log barrier (IPC)', color: '#4fc3f7', fn: (d) => d < dHat ? -Math.log(d / dHat) : 0 },
+    { name: 'Quadratic', color: '#66bb6a', fn: (d) => d < dHat ? ((d - dHat) / d) ** 2 : 0 },
+    { name: 'Cubic (PPF)', color: '#ab47bc', fn: (d) => d < dHat ? Math.abs((d - dHat) ** 3) / (d * d) : 0 },
+  ];
+
+  const maxY = 8;
+  for (const curve of curves) {
+    ctx.strokeStyle = curve.color;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    let first = true;
+    for (let px = 0; px < gw; px++) {
+      const d = (px / gw) * 1.0;
+      if (d < 0.02) continue;
+      let val = curve.fn(d);
+      val = Math.min(val, maxY);
+      const x = pad.l + px;
+      const y = pad.t + gh - (val / maxY) * gh;
+      if (first) { ctx.moveTo(x, y); first = false; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Legend
+  let ly = pad.t + 12;
+  for (const curve of curves) {
+    ctx.fillStyle = curve.color;
+    ctx.fillRect(pad.l + gw - 170, ly, 14, 3);
+    ctx.fillStyle = '#d4d8e3';
+    ctx.font = '12px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(curve.name, pad.l + gw - 150, ly + 5);
+    ly += 20;
+  }
+})();
+</script>
+
+</body>
+</html>

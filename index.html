@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geo-Instructor</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Nav ── -->
+  <nav class="site-nav">
+    <a href="index.html" class="logo">GEO-INSTRUCTOR</a>
+    <div class="nav-links">
+      <a href="index.html" class="active">[ WORK ]</a>
+      <a href="#">[ ABOUT ]</a>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <header class="hero">
+    <h1>Seeing the geometry<br>beneath everything.</h1>
+    <p class="subtitle">
+      Visual, interactive explorations of geometry, graphics,
+      physics, and simulation. Show first. Explain second.
+      Formalize last.
+    </p>
+  </header>
+
+  <!-- ── ASCII art divider ── -->
+  <div class="ascii-art">
+  ╔══════════════════════════════════════════════════════════╗
+  ║  ·  ·     ·        ·  ·  ·     ·        ·   ARTICLES   ║
+  ║     ·  ·     ·  ·        ·  ·     ·  ·      ─────────  ║
+  ║  ·        ·     ·  ·  ·        ·     ·  ·              ║
+  ╚══════════════════════════════════════════════════════════╝
+  </div>
+
+  <!-- ── Post listing ── -->
+  <div class="post-grid">
+
+    <a href="posts/large-steps-cloth/index.html" class="post-card">
+      <div class="post-date">JUNE 2025</div>
+      <h2>Large Steps in Cloth — Baraff & Witkin (1998)</h2>
+      <p class="post-desc">
+        In 1998, two researchers showed how to simulate cloth without crawling
+        through time one tiny step at a time. Implicit integration let them take
+        steps 50× larger than anyone thought possible. This paper changed everything.
+      </p>
+      <div class="post-tags">
+        <span class="tag">Cloth Simulation</span>
+        <span class="tag">Implicit Integration</span>
+        <span class="tag">SIGGRAPH 1998</span>
+        <span class="tag">Interactive</span>
+      </div>
+    </a>
+
+    <a href="posts/point-cloud-icp/index.html" class="post-card">
+      <div class="post-date">JUNE 2025</div>
+      <h2>Seeing in Points — A Visual Guide to Point Clouds & ICP</h2>
+      <p class="post-desc">
+        What are point clouds? Where do they come from? And how does the
+        Iterative Closest Point algorithm teach a computer to align two
+        imperfect scans of the same world? An interactive deep dive.
+      </p>
+      <div class="post-tags">
+        <span class="tag">Point Clouds</span>
+        <span class="tag">ICP</span>
+        <span class="tag">3D Geometry</span>
+        <span class="tag">Interactive</span>
+      </div>
+    </a>
+
+    <a href="posts/ppf-contact-solver/index.html" class="post-card">
+      <div class="post-date">JUNE 2025</div>
+      <h2>Why Cloth Won't Cheat — Inside ZOZO's PPF Contact Solver</h2>
+      <p class="post-desc">
+        A SIGGRAPH Asia 2024 engine that simulates cloth, solids, and rods
+        without a single triangle ever passing through another.
+        A beginner's guide with interactive Three.js demos.
+      </p>
+      <div class="post-tags">
+        <span class="tag">Physics Simulation</span>
+        <span class="tag">Contact</span>
+        <span class="tag">FEM</span>
+        <span class="tag">GPU</span>
+        <span class="tag">Three.js</span>
+      </div>
+    </a>
+
+    <div class="post-card coming-soon">
+      <div class="post-date">COMING NEXT</div>
+      <h2>Signed Distance Fields — The Shape of Nothing</h2>
+      <p class="post-desc">
+        Every point in space knows how far it is from the nearest surface.
+        This simple idea unlocks CSG modeling, real-time ray marching,
+        collision detection, and neural implicit surfaces.
+      </p>
+      <div class="post-tags">
+        <span class="tag">SDFs</span>
+        <span class="tag">Ray Marching</span>
+        <span class="tag">Implicit Surfaces</span>
+      </div>
+    </div>
+
+    <div class="post-card coming-soon">
+      <div class="post-date">COMING NEXT</div>
+      <h2>Delaunay &amp; Voronoi — The Dual Dance</h2>
+      <p class="post-desc">
+        Two structures. One set of points. Delaunay connects them into
+        "nice" triangles. Voronoi carves space into territories. Together
+        they solve problems from mesh generation to nearest-neighbor search.
+      </p>
+      <div class="post-tags">
+        <span class="tag">Computational Geometry</span>
+        <span class="tag">Triangulation</span>
+        <span class="tag">Voronoi</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Footer ── -->
+  <footer class="site-footer">
+    <p>GEO-INSTRUCTOR · SEEING THE GEOMETRY BENEATH EVERYTHING</p>
+  </footer>
+
+</div>
+</body>
+</html>

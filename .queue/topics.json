@@ -1,0 +1,77 @@
+{
+  "description": "Topic queue for Geo-Instructor blog auto-generation. The cron job pops the first 'pending' topic, generates a post, validates it with 3 reader subagents, and if approved marks it 'published'. If rejected, marks it 'revision_needed' with feedback.",
+  "topics": [
+    {
+      "id": "sdf-ray-marching",
+      "title": "Signed Distance Fields — The Shape of Nothing",
+      "paper": null,
+      "description": "Every point in space knows how far it is from the nearest surface. This simple idea unlocks CSG modeling, real-time ray marching, collision detection, and neural implicit surfaces.",
+      "tags": ["SDFs", "Ray Marching", "Implicit Surfaces", "Interactive"],
+      "slug": "signed-distance-fields",
+      "status": "pending"
+    },
+    {
+      "id": "delaunay-voronoi",
+      "title": "Delaunay & Voronoi — The Dual Dance",
+      "paper": null,
+      "description": "Two structures. One set of points. Delaunay connects them into nice triangles. Voronoi carves space into territories. Together they solve problems from mesh generation to nearest-neighbor search.",
+      "tags": ["Computational Geometry", "Triangulation", "Voronoi", "Interactive"],
+      "slug": "delaunay-voronoi",
+      "status": "pending"
+    },
+    {
+      "id": "marching-cubes",
+      "title": "Marching Cubes — Building Surfaces from Fog",
+      "paper": "Lorensen & Cline, SIGGRAPH 1987",
+      "description": "How do you turn a 3D grid of density values into a triangle mesh? Walk through each cube, look up a table, and connect the dots. The most-cited algorithm in scientific visualization.",
+      "tags": ["Isosurface", "Mesh Generation", "Visualization", "Interactive"],
+      "slug": "marching-cubes",
+      "status": "pending"
+    },
+    {
+      "id": "half-edge",
+      "title": "The Half-Edge — A Data Structure for Meshes",
+      "paper": null,
+      "description": "Every mesh operation — subdivision, simplification, traversal — depends on answering one question fast: who are my neighbors? The half-edge data structure is the answer.",
+      "tags": ["Mesh Processing", "Data Structures", "Geometry", "Interactive"],
+      "slug": "half-edge-mesh",
+      "status": "pending"
+    },
+    {
+      "id": "bezier-curves",
+      "title": "Bézier Curves — Drawing with Control Points",
+      "paper": null,
+      "description": "Four points define a curve. Move any point and the curve follows smoothly. De Casteljau's algorithm reveals why, one linear interpolation at a time.",
+      "tags": ["Curves", "CAGD", "De Casteljau", "Interactive"],
+      "slug": "bezier-curves",
+      "status": "pending"
+    },
+    {
+      "id": "spatial-hashing",
+      "title": "Spatial Hashing — Finding Neighbors in Constant Time",
+      "paper": null,
+      "description": "Forget tree traversals. Hash particle positions into grid cells and check only neighbors. The simplest spatial data structure, and often the fastest for uniform distributions.",
+      "tags": ["Spatial Indexing", "Collision Detection", "Particles", "Interactive"],
+      "slug": "spatial-hashing",
+      "status": "pending"
+    },
+    {
+      "id": "verlet-integration",
+      "title": "Verlet Integration — Simulating without Velocity",
+      "paper": null,
+      "description": "Store two positions instead of position + velocity. Constraints become trivial. The backbone of every real-time physics engine from Hitman to Vellum.",
+      "tags": ["Physics", "Integration", "Constraints", "Interactive"],
+      "slug": "verlet-integration",
+      "status": "pending"
+    },
+    {
+      "id": "ray-triangle",
+      "title": "Ray-Triangle Intersection — The Atom of Ray Tracing",
+      "paper": "Möller & Trumbore, 1997",
+      "description": "Every ray tracer, every physics engine, every collision detector calls this routine billions of times. Barycentric coordinates make it elegant.",
+      "tags": ["Ray Tracing", "Intersection", "Barycentric", "Interactive"],
+      "slug": "ray-triangle-intersection",
+      "status": "pending"
+    }
+  ]
+}
