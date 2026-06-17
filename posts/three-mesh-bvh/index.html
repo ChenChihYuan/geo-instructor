@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>three-mesh-bvh — Making Three.js Spatially Aware</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+  </script>
+  <style>
+    .memory-layout { display: grid; grid-template-columns: 1fr; gap: 16px; margin: 24px 0; }
+    .memory-row { display: flex; align-items: stretch; gap: 0; border-radius: 6px; overflow: hidden; border: 1px solid #D4D0CC; }
+    .memory-cell { padding: 10px 14px; font-family: var(--font-mono); font-size: 0.78rem; text-align: center; flex: 1; border-right: 1px solid #D4D0CC; display: flex; flex-direction: column; justify-content: center; }
+    .memory-cell:last-child { border-right: none; }
+    .memory-cell.header { background: #2A2622; color: #F4F2F0; font-weight: 600; }
+    .memory-cell.bounds { background: #1A1AE510; }
+    .memory-cell.offset { background: #C0392B10; }
+    .memory-cell.count { background: #27AE6010; }
+    .memory-label { font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .algo-box { background: #FAFAF8; border: 1px solid #E8E5E0; border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+    .algo-box h4 { margin: 0 0 12px 0; font-family: var(--font-mono); color: var(--accent); font-size: 0.9rem; }
+    .interactive { margin: 24px 0; background: #FAFAF8; border: 1px solid #E8E5E0; border-radius: 10px; padding: 20px; }
+    .interactive canvas { width: 100%; display: block; border-radius: 6px; }
+    .controls { display: flex; gap: 10px; margin-top: 14px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <nav class="site-nav">
+    <a href="../../index.html" class="logo">GEO-INSTRUCTOR</a>
+    <div class="nav-links">
+      <a href="../../index.html">[ WORK ]</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <h1>three-mesh-bvh</h1>
+    <p class="subtitle">
+      500 rays. 80,000 triangles. 60 frames per second.
+      How? By building a tree of boxes. Each box knows which triangles
+      live inside it. A ray only visits boxes it actually hits.
+      This is the BVH — the invisible architecture that makes
+      real-time spatial queries possible in the browser.
+    </p>
+    <p class="meta pixel-label">JUNE 2025 · 35 min read</p>
+    <div class="tags">
+      <span class="tag">BVH</span>
+      <span class="tag">Spatial Indexing</span>
+      <span class="tag">Raycasting</span>
+      <span class="tag">Three.js</span>
+      <span class="tag">Interactive</span>
+    </div>
+  </header>
+
+  <!-- ═══════ HERO: 3D BVH visualization ═══════ -->
+  <div class="scene-box" id="heroSceneBox">
+    <canvas id="heroCanvas" style="height:380px;"></canvas>
+    <div class="scene-controls">
+      <button class="btn primary" id="btnShowBVH">Show BVH</button>
+      <button class="btn" id="btnRaycast">Cast Rays</button>
+      <label style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:0.85rem;">
+        Depth
+        <input type="range" id="depthSlider" min="0" max="7" value="3" style="width:100px;">
+        <span id="depthVal" style="font-family:var(--font-mono);color:var(--accent);min-width:20px;">3</span>
+      </label>
+    </div>
+    <div class="scene-caption">A torus knot wrapped in its BVH boxes. Drag the depth slider to peel back layers of the hierarchy. Toggle "Cast Rays" to see which boxes a ray visits vs. skips.</div>
+  </div>
+
+  <!-- ═══════ TABLE OF CONTENTS ═══════ -->
+  <nav class="toc">
+    <div class="toc-title">IN THIS ARTICLE</div>
+    <ol>
+      <li><a href="#problem">The problem: needles in triangle haystacks</a></li>
+      <li><a href="#what-is-bvh">What is a BVH?</a></li>
+      <li><a href="#demo-2d">Interactive: building a BVH in 2D</a></li>
+      <li><a href="#building">Split strategies — choosing where to cut</a></li>
+      <li><a href="#sah-demo">Interactive: SAH vs. Median comparison</a></li>
+      <li><a href="#ray-aabb">The ray-AABB slab test</a></li>
+      <li><a href="#traversal">Traversal — skipping what you can't hit</a></li>
+      <li><a href="#demo-raycast">Interactive: ray traversal step-by-step</a></li>
+      <li><a href="#memory-layout">Memory layout — flat arrays, not objects</a></li>
+      <li><a href="#beyond-rays">Beyond rays — spatial queries</a></li>
+      <li><a href="#closest-point-demo">Interactive: closest point query</a></li>
+      <li><a href="#dual-tree">Dual-tree traversal (bvhcast)</a></li>
+      <li><a href="#three-mesh-bvh-lib">The library — three-mesh-bvh</a></li>
+      <li><a href="#usage">Using it in 5 minutes</a></li>
+      <li><a href="#perf">Performance — the numbers</a></li>
+      <li><a href="#applications">Where people use it</a></li>
+      <li><a href="#history">History: from 1976 to today</a></li>
+      <li><a href="#reading">Further reading</a></li>
+    </ol>
+  </nav>
+
+  <article>
+
+    <!-- ═══════ SECTION 1: The Problem ═══════ -->
+    <h2 id="problem">The problem: needles in triangle haystacks</h2>
+
+    <p>
+      You have a 3D model — say a character mesh with 80,000 triangles.
+      A user clicks the screen. You need to answer:
+      <strong>which triangle did they click on?</strong>
+    </p>
+    <p>
+      The naive approach: test the click-ray against every single triangle.
+      80,000 ray-triangle intersection tests. Every frame. At 60fps,
+      that's <strong>4.8 million tests per second</strong> — for a single ray.
+    </p>
+    <p>
+      Now imagine a game with selection highlights, physics raycasts for ground
+      detection, visibility checks, shadow rays, mouse hover effects...
+      You might need <em>hundreds</em> of rays per frame.
+      The naive approach collapses instantly.
+    </p>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">THE CORE QUESTION</div>
+      <p>
+        How do you avoid testing a ray against triangles it could never possibly hit?
+      </p>
+    </div>
+
+    <p>
+      The answer is the same trick humans use when searching a library.
+      You don't check every book on every shelf. You go to the right floor,
+      the right section, the right shelf, <em>then</em> scan individual spines.
+      You <strong>spatially narrow</strong> your search.
+    </p>
+    <p>
+      A Bounding Volume Hierarchy (BVH) does exactly this for 3D geometry.
+    </p>
+
+    <!-- ═══════ SECTION 2: What is a BVH? ═══════ -->
+    <h2 id="what-is-bvh">What is a BVH?</h2>
+
+    <p>A BVH is a binary tree where:</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-title">Every leaf holds triangles</div>
+        <p>The bottom of the tree stores small groups of actual triangles — typically ≤10 per leaf.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Every node holds a bounding box</div>
+        <p>Each node stores an axis-aligned bounding box (AABB) that <em>completely encloses</em> all triangles beneath it.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">The root encloses the entire mesh</div>
+        <p>The topmost box wraps every triangle. Its children split that space into two roughly-equal halves. Their children split further. And so on.</p>
+      </div>
+    </div>
+
+    <p>
+      Think of it like nested boxes. The biggest box contains two smaller boxes.
+      Each of those contains two even smaller boxes. Keep going until the boxes
+      are small enough to hold just a few triangles.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">KEY INSIGHT</div>
+      <p>
+        If a ray misses a bounding box, it misses <em>everything inside</em> that box.
+        One cheap ray-box test eliminates thousands of expensive ray-triangle tests.
+      </p>
+    </div>
+
+    <p>
+      For a mesh with <em>N</em> triangles, brute force costs <strong>O(N)</strong> per ray.
+      A BVH reduces this to <strong>O(log N)</strong> — the depth of the tree.
+      For 80,000 triangles, that's roughly 17 box tests instead of 80,000 triangle tests.
+    </p>
+
+    <div class="equation">O(N) → O(log N) · For 80K triangles: 80,000 tests → ~17 tests</div>
+
+    <p>
+      That's a <strong>4,700× reduction</strong>. The difference between a slideshow
+      and smooth real-time interaction.
+    </p>
+
+    <h3>Why axis-aligned boxes?</h3>
+
+    <p>
+      An AABB (Axis-Aligned Bounding Box) is defined by just 6 numbers: min and max
+      along each of X, Y, Z. It's the tightest rectangular box whose faces are
+      parallel to the coordinate axes. Why not spheres, or oriented boxes?
+    </p>
+
+    <ul>
+      <li><strong>Storage</strong>: 6 floats per node. Oriented boxes need 15+ (center, axes, half-extents).</li>
+      <li><strong>Ray test</strong>: The AABB ray test (slab method) uses only subtractions, multiplications, and min/max — no square roots, no dot products. About 13 operations total.</li>
+      <li><strong>Construction</strong>: Computing the AABB of N points is O(N) — just track min/max per axis.</li>
+      <li><strong>Merging</strong>: The AABB enclosing two AABBs is computed with 6 min/max operations.</li>
+    </ul>
+
+    <p>
+      The downside: AABBs can waste space on diagonal geometry (imagine a long thin rod
+      tilted at 45°). But in practice, the simplicity and speed of AABB tests
+      overwhelm the slightly-looser fits, especially when you have many levels of hierarchy.
+    </p>
+
+    <!-- ═══════ SECTION 3: Interactive 2D BVH ═══════ -->
+    <h2 id="demo-2d">Interactive: building a BVH in 2D</h2>
+
+    <p>
+      This demo shows BVH construction in 2D. Each colored triangle is a primitive.
+      Click <strong>Step</strong> to watch the algorithm split the bounding boxes
+      one level at a time. Notice how each split roughly halves the triangle count
+      on each side. The split always happens along the <em>longest axis</em> of the
+      current box — this tends to produce the most balanced partitions.
+    </p>
+
+    <div class="interactive">
+      <canvas id="bvhBuildCanvas" width="700" height="400"></canvas>
+      <div class="controls">
+        <button class="btn primary" id="btnBvhStep">▶ Step</button>
+        <button class="btn" id="btnBvhReset">↺ Reset</button>
+        <button class="btn" id="btnBvhAll">Build All</button>
+      </div>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-top:12px;text-align:center;">
+        <span style="color:var(--accent);">■</span> Bounding boxes
+        · Each step splits the longest-axis box at its centroid midpoint.
+        Depth: <span id="bvhBuildDepth" style="font-family:var(--font-mono);color:var(--accent);">0</span>
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 4: Split Strategies ═══════ -->
+    <h2 id="building">Split strategies — choosing where to cut</h2>
+
+    <p>
+      How do you decide which triangles go in the left child vs. the right child?
+      This is the <strong>split strategy</strong>, and it dramatically affects performance.
+      three-mesh-bvh offers three:
+    </p>
+
+    <div class="comparison">
+      <div>
+        <h4>CENTER</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          Find the longest axis. Split at the spatial midpoint of the bounding box.
+          Triangles whose centroids fall below the midpoint go left, the rest go right.<br><br>
+          ⚡ Fastest to build (no sorting needed)<br>
+          ✗ Can produce unbalanced trees when geometry is clustered<br>
+          ✗ Bad for non-uniform distributions
+        </p>
+      </div>
+      <div>
+        <h4>AVERAGE</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          Split at the <em>average centroid position</em> along the longest axis.
+          Adapts to where the triangles actually are, not where the box center is.<br><br>
+          ⚡ Slightly slower (must compute mean)<br>
+          ✓ Better for clustered geometry<br>
+          ✗ Still purely geometric — ignores query cost
+        </p>
+      </div>
+    </div>
+
+    <p>
+      But the real star is the <strong>Surface Area Heuristic (SAH)</strong>.
+    </p>
+
+    <h3>The Surface Area Heuristic</h3>
+
+    <p>
+      SAH asks: "If a random ray passes through the parent box,
+      what's the <em>expected cost</em> of this split?" The key insight
+      comes from geometric probability:
+    </p>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">SAH PRINCIPLE</div>
+      <p>
+        The probability that a random ray hits a child box is proportional
+        to the child's <strong>surface area</strong> relative to the parent's.
+        A child with half the parent's surface area will be hit by roughly half the rays.
+      </p>
+    </div>
+
+    <p>
+      Why surface area? Imagine standing outside a box and throwing darts randomly
+      at it from all directions. The chance of hitting it is proportional to how
+      much "target" it presents — its surface area. A long thin box has less surface
+      area than a big cube, so random rays are less likely to hit it.
+    </p>
+
+    <p>The cost of a split is:</p>
+
+    <div class="equation">
+      Cost = C_trav + (SA_left / SA_parent) × N_left × C_isect + (SA_right / SA_parent) × N_right × C_isect
+    </div>
+
+    <p>Where:</p>
+    <ul>
+      <li><code>SA_left, SA_right</code> = surface areas of the two child boxes</li>
+      <li><code>SA_parent</code> = surface area of the parent box</li>
+      <li><code>N_left, N_right</code> = number of triangles in each child</li>
+      <li><code>C_trav</code> = cost of testing a ray against one box (~1 unit)</li>
+      <li><code>C_isect</code> = cost of testing a ray against one triangle (~8 units)</li>
+    </ul>
+
+    <p>
+      In practice, three-mesh-bvh uses a <strong>binned SAH</strong> approximation:
+      instead of testing every possible split position, it divides each axis into
+      <strong>12 buckets</strong>, counts how many triangle centroids fall into each bucket,
+      and evaluates the SAH cost at each bucket boundary. This reduces the O(N²)
+      exhaustive search to O(N) per axis — fast enough to build million-triangle BVHs.
+    </p>
+
+    <div class="algo-box">
+      <h4>BINNED SAH — Step by Step</h4>
+      <pre>
+for each axis in [X, Y, Z]:
+    1. Compute centroid bounds along this axis
+    2. Divide into 12 equal-width buckets
+    3. For each triangle: assign to bucket by centroid position
+    4. For each bucket: accumulate (count, bbox)
+    5. Sweep left-to-right: compute prefix sums of (count, bbox)
+    6. Sweep right-to-left: compute suffix sums of (count, bbox)
+    7. For each split position (11 candidates):
+         cost = SA(left_bbox) × left_count + SA(right_bbox) × right_count
+    8. Track minimum cost across all axes and positions
+
+Total: 3 axes × 12 buckets × N assignments = O(N) work</pre>
+    </div>
+
+    <p>
+      Intuitively: SAH avoids splits that create one huge box and one tiny box.
+      It prefers splits where both children have small surface areas — because
+      smaller boxes are less likely to be hit by random rays. It also avoids
+      putting too many triangles on one side.
+    </p>
+
+    <div class="concept-grid">
+      <div class="concept-card">
+        <div class="icon">✗</div>
+        <h4>Bad split</h4>
+        <p>Left child: 95% of the surface area, 60% of the triangles. Most rays still have to visit it. Barely faster than no split at all.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">✓</div>
+        <h4>Good split (SAH)</h4>
+        <p>Left child: 40% surface area, 45% triangles. Right child: 50% surface area, 55% triangles. Rays are routed efficiently to smaller subproblems.</p>
+      </div>
+    </div>
+
+    <h3>Construction pseudocode</h3>
+
+    <pre>
+function buildBVH(triangles, depth):
+    // Base case: few enough triangles for a leaf
+    if triangles.length ≤ maxLeafTris:
+        return LeafNode(boundingBox(triangles), triangles)
+
+    // Try splitting along each axis (X, Y, Z)
+    bestCost = Infinity
+    for axis in [X, Y, Z]:
+        // Divide axis range into 12 buckets
+        for each bucket boundary:
+            left, right = partition(triangles, axis, boundary)
+            cost = SAH_cost(left, right, triangles)
+            if cost < bestCost:
+                bestCost = cost
+                bestSplit = (axis, boundary)
+
+    // If splitting isn't worth it, make a leaf
+    if bestCost > N_triangles × C_intersect:
+        return LeafNode(boundingBox(triangles), triangles)
+
+    // Recurse
+    left, right = partition(triangles, bestSplit)
+    return InternalNode(
+        box:   boundingBox(triangles),
+        left:  buildBVH(left,  depth + 1),
+        right: buildBVH(right, depth + 1)
+    )</pre>
+
+    <p>
+      The defaults in three-mesh-bvh: <code>maxLeafTris = 10</code>,
+      <code>maxDepth = 40</code>, strategy = SAH (since v0.5).
+      For an 80K triangle mesh, the tree typically has ~15 levels and ~16,000 nodes.
+    </p>
+
+    <!-- ═══════ SECTION 5: SAH Demo ═══════ -->
+    <h2 id="sah-demo">Interactive: SAH vs. Median comparison</h2>
+
+    <p>
+      This demo shows two BVHs built from the same geometry — one using a simple median
+      split (divide triangles in half by position), the other using SAH. Cast rays and
+      compare how many boxes each strategy needs to test.
+    </p>
+
+    <div class="interactive">
+      <canvas id="sahCompareCanvas" width="700" height="350"></canvas>
+      <div class="controls">
+        <button class="btn primary" id="btnSahCast">Cast 10 Rays</button>
+        <button class="btn" id="btnSahRegen">↺ New Geometry</button>
+      </div>
+      <p id="sahStats" style="font-size:0.78rem;color:var(--text-muted);margin-top:12px;text-align:center;font-family:var(--font-mono);">
+        Click "Cast 10 Rays" to compare. Left = Median split. Right = SAH split.
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 6: Ray-AABB Slab Test ═══════ -->
+    <h2 id="ray-aabb">The ray-AABB slab test</h2>
+
+    <p>
+      The BVH's power depends on testing "does this ray hit this box?" being
+      <em>very cheap</em>. The standard algorithm is the <strong>slab method</strong>,
+      invented by Kay &amp; Kajiya in 1986. It's elegant and branchless.
+    </p>
+
+    <h3>The idea: slabs</h3>
+
+    <p>
+      Think of an AABB as the intersection of 3 "slabs" — one per axis.
+      A slab is the space between two parallel planes. The X-slab is everything
+      between x=min_x and x=max_x. The Y-slab is between y=min_y and y=max_y.
+      The Z-slab is between z=min_z and z=max_z.
+    </p>
+
+    <p>
+      A point is inside the box if and only if it's inside <em>all three slabs simultaneously</em>.
+    </p>
+
+    <p>
+      For a ray, we compute when it enters and exits each slab:
+    </p>
+
+    <div class="algo-box">
+      <h4>RAY-AABB SLAB TEST</h4>
+      <pre>
+// Ray: P(t) = origin + t × direction
+// Box: [min_x, max_x] × [min_y, max_y] × [min_z, max_z]
+
+// For each axis, find t-values where ray crosses the slab boundaries
+t_x_enter = (min_x - origin.x) / direction.x
+t_x_exit  = (max_x - origin.x) / direction.x
+if t_x_enter > t_x_exit: swap(t_x_enter, t_x_exit)  // handle negative direction
+
+t_y_enter = (min_y - origin.y) / direction.y
+t_y_exit  = (max_y - origin.y) / direction.y
+if t_y_enter > t_y_exit: swap(t_y_enter, t_y_exit)
+
+t_z_enter = (min_z - origin.z) / direction.z
+t_z_exit  = (max_z - origin.z) / direction.z
+if t_z_enter > t_z_exit: swap(t_z_enter, t_z_exit)
+
+// The ray is inside the box when it's inside ALL slabs simultaneously
+t_enter = max(t_x_enter, t_y_enter, t_z_enter)  // latest entry
+t_exit  = min(t_x_exit,  t_y_exit,  t_z_exit)   // earliest exit
+
+// Hit if: entered before exited, AND exit is in front of ray origin
+return t_enter ≤ t_exit AND t_exit ≥ 0</pre>
+    </div>
+
+    <p>
+      Why is this so fast? Only 6 subtractions, 6 multiplications, 2 swaps (or min/max),
+      2 three-way max/min, and 2 comparisons. No branches needed — modern CPUs can
+      compute this entirely with SIMD instructions. The GPU does it in a single clock cycle.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">GEOMETRIC INTUITION</div>
+      <p>
+        Imagine shining a laser through 3 sets of venetian blinds at right angles.
+        The laser only reaches the far wall if it passes through the gap in ALL THREE
+        sets of blinds at the same time. <code>t_enter</code> is when the laser first
+        passes through all three gaps simultaneously. <code>t_exit</code> is when it
+        leaves any one of them.
+      </p>
+    </div>
+
+    <h3>Interactive: the slab test visualized</h3>
+
+    <p>
+      Drag the ray origin and direction in this 2D demo. The orange regions are where
+      the ray is inside each slab (X and Y). The green segment is where it's inside
+      <em>both</em> — the ray-box intersection interval.
+    </p>
+
+    <div class="interactive">
+      <canvas id="slabCanvas" width="700" height="350"></canvas>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-top:12px;text-align:center;">
+        Drag the <span style="color:#C0392B;">●</span> ray origin.
+        <span style="color:#E67E22;">█</span> X-slab interval ·
+        <span style="color:#3498DB;">█</span> Y-slab interval ·
+        <span style="color:#27AE60;">█</span> intersection (both slabs)
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 7: Traversal ═══════ -->
+    <h2 id="traversal">Traversal — skipping what you can't hit</h2>
+
+    <p>
+      Once the tree is built, querying it is elegant:
+    </p>
+
+    <pre>
+function raycast(ray, node):
+    // Does the ray hit this node's bounding box?
+    if not rayIntersectsAABB(ray, node.box):
+        return null     // Skip this ENTIRE subtree!
+
+    // Leaf node: test actual triangles
+    if node.isLeaf:
+        return closestHit(ray, node.triangles)
+
+    // Internal node: recurse into both children
+    hitLeft  = raycast(ray, node.left)
+    hitRight = raycast(ray, node.right)
+    return closer(hitLeft, hitRight)</pre>
+
+    <p>
+      The magic is in line 3: <strong>one cheap ray-AABB test eliminates an
+      entire subtree</strong>. At depth 3, skipping one node skips 1/8th of all
+      triangles. At depth 5, one skip eliminates 1/32nd.
+    </p>
+
+    <p>
+      A well-built BVH means most rays touch only 15–30 nodes total
+      out of thousands — visiting a narrow "path" through the tree
+      from root to the one or two leaves that actually matter.
+    </p>
+
+    <h3>The firstHitOnly optimization</h3>
+
+    <p>
+      three-mesh-bvh supports <code>raycaster.firstHitOnly = true</code>.
+      Instead of finding the <em>closest</em> hit (which requires checking all
+      potential hits), it stops at the <em>first confirmed</em> hit. This enables:
+    </p>
+
+    <ul>
+      <li><strong>Shadow rays</strong> — just need to know if <em>something</em> blocks the light</li>
+      <li><strong>Occlusion tests</strong> — is point A visible from point B?</li>
+      <li><strong>Ground detection</strong> — is there a floor below the player?</li>
+    </ul>
+
+    <p>
+      With firstHitOnly, the tree uses <strong>front-to-back ordering</strong>:
+      visit the nearer child first. Once it finds a hit, it prunes the far child
+      if that child's box is entirely behind the hit distance. This can be 2–5× faster.
+    </p>
+
+    <div class="algo-box">
+      <h4>FRONT-TO-BACK TRAVERSAL (firstHitOnly)</h4>
+      <pre>
+function raycastFirst(ray, node):
+    if not rayIntersectsAABB(ray, node.box):
+        return null
+
+    if node.isLeaf:
+        return closestHit(ray, node.triangles)
+
+    // Determine which child's box is nearer along ray
+    t_left  = rayBoxEntry(ray, node.left.box)
+    t_right = rayBoxEntry(ray, node.right.box)
+
+    // Visit nearer child first
+    [near, far] = t_left < t_right ? [left, right] : [right, left]
+
+    hit = raycastFirst(ray, near)
+    if hit:
+        // If far child's entry is beyond our hit, skip it entirely!
+        if rayBoxEntry(ray, far.box) > hit.distance:
+            return hit
+    // Otherwise, check far child too
+    farHit = raycastFirst(ray, far)
+    return closer(hit, farHit)</pre>
+    </div>
+
+    <!-- ═══════ SECTION 8: Interactive ray traversal ═══════ -->
+    <h2 id="demo-raycast">Interactive: ray traversal step-by-step</h2>
+
+    <p>
+      Click anywhere in the scene below to cast a ray.
+      Watch which bounding boxes get <strong>tested</strong>
+      (<span style="color:#1A1AE5;">blue outline</span>)
+      vs. <strong>skipped</strong> (no outline).
+      The hit triangle is highlighted in
+      <span style="color:#C0392B;">red</span>.
+      The counter shows how many boxes the ray tested vs. the total.
+    </p>
+
+    <div class="interactive">
+      <canvas id="rayTraversalCanvas" width="700" height="420"></canvas>
+      <p id="rayStats" style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);text-align:center;margin-top:12px;">
+        Click to cast a ray. Boxes tested: — / —. Triangles tested: — / —.
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 9: Memory Layout ═══════ -->
+    <h2 id="memory-layout">Memory layout — flat arrays, not objects</h2>
+
+    <p>
+      A naive BVH implementation would use JavaScript objects:
+    </p>
+
+    <pre>
+// ❌ Naive: heap-allocated objects, scattered in memory
+class BVHNode {
+    constructor() {
+        this.boundingBox = { min: {x,y,z}, max: {x,y,z} };
+        this.left = null;   // pointer to child
+        this.right = null;  // pointer to child
+        this.triangles = [];
+    }
+}</pre>
+
+    <p>
+      For an 80K-triangle mesh, that's ~16,000 node objects, each with nested objects
+      for bounding boxes, plus arrays for triangle indices. That's <strong>100,000+
+      heap allocations</strong> — terrible for the garbage collector, terrible for
+      cache locality (objects scattered randomly in memory).
+    </p>
+
+    <p>
+      three-mesh-bvh does something radically different: it packs the entire tree
+      into <strong>two flat typed arrays</strong>.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">THE FLAT ARRAY TRICK</div>
+      <p>
+        The BVH is stored as a single <code>Float32Array</code> for bounds data and
+        a <code>Uint32Array</code> for tree structure. Zero heap allocations per node.
+        The entire tree is one contiguous memory block — maximally cache-friendly,
+        transferable to WebWorkers with zero-copy, and GC-invisible.
+      </p>
+    </div>
+
+    <h3>Node layout in memory</h3>
+
+    <p>Each BVH node occupies a fixed-size slot in the buffer. Internal nodes and leaf nodes
+    share the same layout but interpret fields differently:</p>
+
+    <div class="memory-layout">
+      <div class="memory-row">
+        <div class="memory-cell header">Byte 0–3</div>
+        <div class="memory-cell header">Byte 4–7</div>
+        <div class="memory-cell header">Byte 8–11</div>
+        <div class="memory-cell header">Byte 12–15</div>
+        <div class="memory-cell header">Byte 16–19</div>
+        <div class="memory-cell header">Byte 20–23</div>
+        <div class="memory-cell header">Byte 24–27</div>
+        <div class="memory-cell header">Byte 28–31</div>
+      </div>
+      <div class="memory-row">
+        <div class="memory-cell bounds">min_x<div class="memory-label">float32</div></div>
+        <div class="memory-cell bounds">min_y<div class="memory-label">float32</div></div>
+        <div class="memory-cell bounds">min_z<div class="memory-label">float32</div></div>
+        <div class="memory-cell bounds">max_x<div class="memory-label">float32</div></div>
+        <div class="memory-cell bounds">max_y<div class="memory-label">float32</div></div>
+        <div class="memory-cell bounds">max_z<div class="memory-label">float32</div></div>
+        <div class="memory-cell offset">offset/count<div class="memory-label">uint32</div></div>
+        <div class="memory-cell count">splitAxis/leaf<div class="memory-label">uint16×2</div></div>
+      </div>
+    </div>
+
+    <p>The interpretation depends on whether it's a leaf or internal node:</p>
+
+    <div class="comparison">
+      <div>
+        <h4>Internal Node</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          <code>offset</code> = byte offset to the right child<br>
+          Left child is always the next node in memory (implicit)<br>
+          <code>splitAxis</code> = 0, 1, or 2 (X, Y, Z)<br><br>
+          Children are found without pointer chasing — just array index math.
+        </p>
+      </div>
+      <div>
+        <h4>Leaf Node</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          <code>offset</code> = start index into the (reordered) index buffer<br>
+          <code>count</code> = number of triangles in this leaf<br>
+          Leaf flag = special bit in the metadata field<br><br>
+          Triangle data lives in the geometry's own index buffer — no duplication.
+        </p>
+      </div>
+    </div>
+
+    <h3>Why this matters</h3>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-title">Cache locality</div>
+        <p>Traversal reads nodes sequentially or via predictable jumps. The CPU prefetcher loves this. A pointer-based tree causes random cache misses on every node visit.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Zero-copy WebWorker transfer</div>
+        <p><code>Float32Array</code> and <code>Uint32Array</code> are <em>transferable</em>. You can send the entire BVH to a worker in microseconds — the buffer moves, not copies. Essential for off-main-thread construction.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">Serialization is free</div>
+        <p>Saving/loading a BVH is just writing/reading the raw typed array bytes. No serialization logic needed. This is how <code>MeshBVH.serialize()</code> works — it just hands you the buffers.</p>
+      </div>
+      <div class="step">
+        <div class="step-title">GPU texture encoding</div>
+        <p>For GPU path tracing, the flat array maps directly into a texture. The fragment shader reads BVH nodes as texel fetches — same layout, no conversion needed.</p>
+      </div>
+    </div>
+
+    <h3>Index buffer reordering</h3>
+
+    <p>
+      Here's a subtle but important optimization: during BVH construction,
+      three-mesh-bvh <strong>reorders the geometry's index buffer</strong> so that
+      triangles belonging to the same leaf are contiguous in memory.
+    </p>
+
+    <pre>
+// Before BVH construction:
+// index buffer: [tri_0, tri_1, tri_2, ..., tri_N]  (arbitrary order)
+
+// After BVH construction:
+// index buffer: [leaf_0_tris..., leaf_1_tris..., leaf_2_tris..., ...]
+// Each leaf just stores: startIndex, count
+// Triangles for leaf 5 are at: indexBuffer[leaf5.start .. leaf5.start + leaf5.count]</pre>
+
+    <p>
+      This means reading all triangles in a leaf is a single contiguous memory access.
+      No index indirection, no scattered reads. When the GPU renders this mesh,
+      triangles that are spatially close are also close in the vertex buffer —
+      improving vertex cache utilization.
+    </p>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">THE INDIRECT OPTION</div>
+      <p>
+        If you don't want the index buffer modified (e.g., geometry has multiple draw groups),
+        set <code>indirect: true</code>. This creates a separate indirection array instead of
+        reordering the index buffer. Slightly slower traversal, but preserves the original
+        buffer structure.
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 10: Beyond Rays ═══════ -->
+    <h2 id="beyond-rays">Beyond rays — spatial queries</h2>
+
+    <p>
+      A BVH isn't just for rays. Any spatial query expressible as
+      "does shape X overlap box Y?" can reuse the same tree traversal.
+      three-mesh-bvh provides a rich set of queries:
+    </p>
+
+    <div class="concept-grid">
+      <div class="concept-card">
+        <div class="icon">📏</div>
+        <h4>closestPointToPoint</h4>
+        <p>Find the nearest point on the mesh surface to a given position. Uses distance-guided pruning — if the nearest candidate so far is distance d, skip any box further than d. Essential for SDF generation and snapping.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🔮</div>
+        <h4>intersectsSphere / intersectsBox</h4>
+        <p>Does a sphere or box overlap any triangle? Used for area-of-effect damage, brush tools, frustum culling, region queries. Returns all affected triangles.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🏗️</div>
+        <h4>shapecast</h4>
+        <p>The swiss army knife. Sweep any arbitrary shape through the BVH. You provide two callbacks: one to test against bounding boxes, one to test against triangles. The BVH handles the traversal.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🎯</div>
+        <h4>bvhcast (BVH vs. BVH)</h4>
+        <p>Find all intersecting triangle pairs between two meshes. Both BVHs are traversed simultaneously — "dual tree traversal" — pruning entire branches of both trees at once.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">📐</div>
+        <h4>closestPointToGeometry</h4>
+        <p>Nearest distance between two arbitrary meshes. BVH on both sides makes this tractable for complex geometry. Used in collision detection without full contact manifolds.</p>
+      </div>
+      <div class="concept-card">
+        <div class="icon">🗺️</div>
+        <h4>refit</h4>
+        <p>When mesh vertices move (animation, deformation), refit the bounding boxes bottom-up without rebuilding the whole tree. Much faster than reconstruction for small deformations.</p>
+      </div>
+    </div>
+
+    <h3>The shapecast API</h3>
+
+    <p>
+      The <code>shapecast</code> API is the most general query. You provide two callbacks:
+    </p>
+
+    <pre>
+bvh.shapecast({
+  // Called for each BVH node: should the shape test this box?
+  intersectsBounds: (box, isLeaf, score, depth) => {
+    if (myShape.intersectsBox(box)) return INTERSECTED;
+    return NOT_INTERSECTED;  // prune this subtree
+  },
+
+  // Called for each triangle inside a visited leaf
+  intersectsTriangle: (triangle, triIndex, contained, depth) => {
+    if (myShape.containsTriangle(triangle)) {
+      results.push(triIndex);
+    }
+    return false;  // return true to stop early
+  }
+});</pre>
+
+    <p>
+      This is how three-bvh-csg implements boolean operations (union, subtraction,
+      intersection) on meshes — shapecast one mesh's BVH against another's to find
+      all intersecting triangle pairs, then compute the boolean.
+    </p>
+
+    <h3>closestPointToPoint — distance-guided pruning</h3>
+
+    <p>
+      Finding the closest point on a mesh to a given position is one of the most
+      useful spatial queries. The algorithm uses a <strong>shrinking search radius</strong>:
+    </p>
+
+    <div class="algo-box">
+      <h4>CLOSEST POINT QUERY</h4>
+      <pre>
+function closestPointToPoint(point, node, bestDist = Infinity):
+    // Can this node possibly contain a closer point?
+    boxDist = distanceToBox(point, node.box)
+    if boxDist > bestDist:
+        return bestDist  // PRUNE: entire subtree is too far
+
+    if node.isLeaf:
+        for each triangle in node.triangles:
+            d = distanceToTriangle(point, triangle)
+            if d < bestDist:
+                bestDist = d
+                bestPoint = closestPointOnTriangle(point, triangle)
+        return bestDist
+
+    // Visit nearer child first (likely to shrink bestDist faster)
+    d_left  = distanceToBox(point, node.left.box)
+    d_right = distanceToBox(point, node.right.box)
+    [near, far] = d_left < d_right ? [left, right] : [right, left]
+
+    bestDist = closestPointToPoint(point, near, bestDist)
+    bestDist = closestPointToPoint(point, far, bestDist)  // often pruned!
+    return bestDist</pre>
+    </div>
+
+    <p>
+      The key insight: every time we find a closer triangle, our search radius
+      <strong>shrinks</strong>. Nodes further than the current best are pruned.
+      Visiting the nearer child first maximizes early pruning — often the far
+      child is skipped entirely. For a well-built BVH, this takes O(log N) time
+      instead of O(N).
+    </p>
+
+    <!-- ═══════ SECTION 11: Closest Point Demo ═══════ -->
+    <h2 id="closest-point-demo">Interactive: closest point query</h2>
+
+    <p>
+      Move your mouse over the canvas. The algorithm finds the closest point on the
+      shape boundary in real-time, showing which BVH nodes it visits (blue) and
+      which it prunes (grey). Notice how the search radius shrinks as closer
+      candidates are found.
+    </p>
+
+    <div class="interactive">
+      <canvas id="closestPointCanvas" width="700" height="400"></canvas>
+      <p id="closestStats" style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);text-align:center;margin-top:12px;">
+        Move mouse over canvas. Nodes visited: — / —. Distance: —
+      </p>
+    </div>
+
+    <!-- ═══════ SECTION 12: Dual-tree traversal ═══════ -->
+    <h2 id="dual-tree">Dual-tree traversal (bvhcast)</h2>
+
+    <p>
+      What if you need to find all <em>intersecting triangles between two meshes</em>?
+      For collision detection, CSG operations, or contact manifold computation,
+      you need every pair of triangles (one from mesh A, one from mesh B) that overlap.
+    </p>
+
+    <p>
+      Brute force: N × M triangle-triangle tests. For two 50K-triangle meshes,
+      that's 2.5 billion tests. Impossible in real-time.
+    </p>
+
+    <p>
+      With a BVH on each mesh, you can do <strong>dual-tree traversal</strong>:
+      traverse both trees simultaneously, pruning pairs of subtrees whose bounding
+      boxes don't overlap.
+    </p>
+
+    <div class="algo-box">
+      <h4>DUAL-TREE TRAVERSAL (bvhcast)</h4>
+      <pre>
+function bvhcast(nodeA, nodeB):
+    // Do these two nodes' boxes overlap?
+    if not overlaps(nodeA.box, nodeB.box):
+        return  // PRUNE: no triangle in A can intersect any in B
+
+    // Both are leaves: test triangle pairs directly
+    if nodeA.isLeaf AND nodeB.isLeaf:
+        for triA in nodeA.triangles:
+            for triB in nodeB.triangles:
+                if intersects(triA, triB):
+                    results.push(triA, triB)
+        return
+
+    // Descend into the LARGER node (keeps the recursion balanced)
+    if nodeA.volume > nodeB.volume and not nodeA.isLeaf:
+        bvhcast(nodeA.left, nodeB)
+        bvhcast(nodeA.right, nodeB)
+    else if not nodeB.isLeaf:
+        bvhcast(nodeA, nodeB.left)
+        bvhcast(nodeA, nodeB.right)
+    else:
+        // One is a leaf, split the other
+        bvhcast(nodeA.left, nodeB)
+        bvhcast(nodeA.right, nodeB)</pre>
+    </div>
+
+    <p>
+      The magic: at each step, one box-box overlap test can eliminate
+      <em>the entire cross-product</em> of two subtrees. If nodeA contains
+      1000 triangles and nodeB contains 800, a single "no overlap" result
+      prunes 800,000 potential pair tests.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-title pixel-label">WHY SPLIT THE LARGER NODE?</div>
+      <p>
+        Always descending into the larger (by volume) node keeps the recursion
+        balanced. If we always split the same tree, we'd test tiny leaves of A against
+        the full tree of B — inefficient. Alternating based on size ensures both trees
+        are being narrowed down simultaneously.
+      </p>
+    </div>
+
+    <p>
+      In three-mesh-bvh, this is exposed via the <code>bvhcast</code> function:
+    </p>
+
+    <pre>
+import { bvhcast } from 'three-mesh-bvh';
+
+const intersectingPairs = [];
+bvhcast(meshA, meshB, {
+  intersectsTriangles: (triA, triB, indexA, indexB) => {
+    intersectingPairs.push({ indexA, indexB });
+  }
+});
+// intersectingPairs now contains all overlapping triangle pairs</pre>
+
+    <p>
+      This powers <strong>three-bvh-csg</strong> (boolean mesh operations) and
+      <strong>collision detection</strong> for non-convex meshes.
+    </p>
+
+    <!-- ═══════ SECTION 13: The Library ═══════ -->
+    <h2 id="three-mesh-bvh-lib">The library — three-mesh-bvh</h2>
+
+    <p>
+      Garrett Johnson's <a href="https://github.com/gkjohnson/three-mesh-bvh" target="_blank">three-mesh-bvh</a>
+      is the de-facto spatial acceleration library for Three.js.
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-box"><div class="val">3.4K</div><div class="label">GitHub Stars</div></div>
+      <div class="stat-box"><div class="val">3,500+</div><div class="label">Commits</div></div>
+      <div class="stat-box"><div class="val">v0.9</div><div class="label">Current Version</div></div>
+      <div class="stat-box"><div class="val">79</div><div class="label">Releases</div></div>
+    </div>
+
+    <p>What makes it special compared to a textbook BVH?</p>
+
+    <div class="arch-card"><div class="num">1</div><div class="body"><h4>Drop-in replacement</h4><p>Monkey-patches Three.js's existing <code>mesh.raycast()</code>. Your existing code works without changes — just faster. No API migration.</p></div></div>
+    <div class="arch-card"><div class="num">2</div><div class="body"><h4>Flat typed-array storage</h4><p>The tree is stored in <code>Float32Array</code> + <code>Uint32Array</code>. Cache-friendly, GC-friendly, and <code>transferable</code> to WebWorkers with zero-copy.</p></div></div>
+    <div class="arch-card"><div class="num">3</div><div class="body"><h4>WebWorker construction</h4><p>Building a BVH for a 500K-triangle mesh can take 200ms+. The library offloads this to a worker thread so it doesn't freeze the UI.</p></div></div>
+    <div class="arch-card"><div class="num">4</div><div class="body"><h4>Index buffer reordering</h4><p>Reorders the geometry's index buffer so that triangles in the same leaf are contiguous in memory. Improves GPU vertex cache utilization.</p></div></div>
+    <div class="arch-card"><div class="num">5</div><div class="body"><h4>GPU path tracing</h4><p>The BVH can be serialized into textures and traversed in GLSL fragment shaders. Powers <a href="https://github.com/gkjohnson/three-gpu-pathtracer" target="_blank">three-gpu-pathtracer</a>.</p></div></div>
+
+    <p>The ecosystem built on top:</p>
+    <ul>
+      <li><strong>React Three Fiber</strong> — <code>&lt;Bvh&gt;</code> component via @react-three/drei</li>
+      <li><strong>three-gpu-pathtracer</strong> — GPU path tracing with BVH in GLSL shaders</li>
+      <li><strong>three-bvh-csg</strong> — constructive solid geometry (boolean mesh operations)</li>
+      <li><strong>three-edge-projection</strong> — fast hidden-line rendering</li>
+      <li><strong>Three.js editor</strong> — uses it for selection</li>
+    </ul>
+
+    <!-- ═══════ SECTION 14: Usage ═══════ -->
+    <h2 id="usage">Using it in 5 minutes</h2>
+
+    <p>Three lines of setup. One line per mesh. That's it.</p>
+
+    <pre>
+import * as THREE from 'three';
+import {
+  computeBoundsTree, disposeBoundsTree, acceleratedRaycast
+} from 'three-mesh-bvh';
+
+// Patch Three.js prototypes (once, at app startup)
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+
+// Build the BVH for any mesh
+const geometry = new THREE.TorusKnotGeometry(10, 3, 400, 100);
+const mesh = new THREE.Mesh(geometry, material);
+geometry.computeBoundsTree();  // ← this line does the magic
+
+// Raycasting is now ~100x faster. Nothing else changes.
+const raycaster = new THREE.Raycaster();
+raycaster.firstHitOnly = true;   // even faster for shadow/occlusion
+const hits = raycaster.intersectObjects([mesh]);</pre>
+
+    <p>For advanced queries, access the BVH directly:</p>
+
+    <pre>
+const bvh = geometry.boundsTree;
+
+// Find the closest point on the mesh to a world position
+const target = {};
+bvh.closestPointToPoint(point, target);
+// target.point, target.distance, target.faceIndex
+
+// Test if a sphere overlaps any triangle
+const hits = [];
+bvh.shapecast({
+  intersectsBounds: (box) =>
+    box.intersectsSphere(querySphere) ? INTERSECTED : NOT_INTERSECTED,
+  intersectsTriangle: (tri, i) => { hits.push(i); }
+});
+
+// Clean up when done
+geometry.disposeBoundsTree();</pre>
+
+    <p>For <strong>large meshes</strong>, build the BVH in a WebWorker:</p>
+
+    <pre>
+import { GenerateMeshBVHWorker } from 'three-mesh-bvh/src/workers/GenerateMeshBVHWorker.js';
+
+const worker = new GenerateMeshBVHWorker();
+const bvh = await worker.generate(geometry);
+geometry.boundsTree = bvh;
+// UI never freezes, even for million-triangle meshes</pre>
+
+    <!-- ═══════ SECTION 15: Performance ═══════ -->
+    <h2 id="perf">Performance — the numbers</h2>
+
+    <p>How much faster is BVH raycasting? The speedup grows with mesh complexity.</p>
+
+    <div class="interactive">
+      <canvas id="perfCanvas" width="680" height="300"></canvas>
+    </div>
+
+    <div class="comparison">
+      <div>
+        <h4>Without BVH (brute force)</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          1 ray × 80K triangles = 80,000 intersection tests<br>
+          500 rays/frame = 40,000,000 tests/frame<br><br>
+          <strong style="color:var(--accent);">Result: ~2 fps</strong>
+        </p>
+      </div>
+      <div>
+        <h4>With BVH (three-mesh-bvh)</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted);">
+          1 ray × ~17 box + ~10 tri tests = ~27 tests<br>
+          500 rays/frame = 13,500 tests/frame<br><br>
+          <strong style="color:var(--accent);">Result: 60+ fps</strong>
+        </p>
+      </div>
+    </div>
+
+    <h3>Build cost vs. query savings</h3>
+
+    <div class="steps">
+      <div class="step"><div class="step-title">10K triangles → ~5ms build</div><p>Imperceptible. Just build it synchronously on load.</p></div>
+      <div class="step"><div class="step-title">100K triangles → ~50ms build</div><p>One-frame stutter. Fine for loading screens, consider a worker for seamless loading.</p></div>
+      <div class="step"><div class="step-title">1M triangles → ~500ms build</div><p>Use <code>GenerateMeshBVHWorker</code>. The main thread stays smooth.</p></div>
+    </div>
+
+    <p>A 50ms build that saves 16ms per frame pays for itself in 3 frames. After that, every frame runs faster for the lifetime of the mesh.</p>
+
+    <!-- ═══════ SECTION 16: Applications ═══════ -->
+    <h2 id="applications">Where people use it</h2>
+
+    <div class="concept-grid">
+      <div class="concept-card"><div class="icon">🖱️</div><h4>Mouse picking</h4><p>Click on any triangle in a 500K-polygon scene. Without BVH: impossible at 60fps. With BVH: trivial. Every 3D editor, configurator, and CAD viewer needs this.</p></div>
+      <div class="concept-card"><div class="icon">🌊</div><h4>SDF generation</h4><p>To compute a signed distance field, you need the closest triangle to every grid point. With a 256³ grid and a 100K mesh, that's 1.6 trillion brute-force tests — or 268 million with BVH.</p></div>
+      <div class="concept-card"><div class="icon">💡</div><h4>Path tracing</h4><p>three-gpu-pathtracer encodes the BVH into GPU textures and traverses it in fragment shaders. Real-time global illumination — in a browser.</p></div>
+      <div class="concept-card"><div class="icon">✂️</div><h4>CSG (Boolean operations)</h4><p>Union, intersection, subtraction of meshes. three-bvh-csg uses dual-BVH traversal to find intersecting triangle pairs, then computes the boolean geometry.</p></div>
+      <div class="concept-card"><div class="icon">🎮</div><h4>Physics &amp; collision</h4><p>Character controllers need ground detection, wall sliding, and overlap tests every frame against arbitrary mesh colliders — not just convex hulls.</p></div>
+      <div class="concept-card"><div class="icon">🖌️</div><h4>Mesh painting &amp; sculpting</h4><p>Find all triangles under a brush radius. Sphere queries on the BVH return affected triangles in microseconds, enabling responsive 60fps sculpting.</p></div>
+    </div>
+
+    <!-- ═══════ SECTION 17: History ═══════ -->
+    <h2 id="history">History: from 1976 to today</h2>
+
+    <div class="timeline">
+      <div class="timeline-item"><span class="year">1976</span><h4>Clark introduces bounding volume hierarchies</h4><p>James Clark proposes using hierarchical bounding volumes to accelerate visible-surface determination. The original BVH idea.</p></div>
+      <div class="timeline-item"><span class="year">1984</span><h4>Kay &amp; Kajiya: slabs-based BVH for ray tracing</h4><p>First practical use of BVH for ray-object intersection acceleration. Introduces the slab method for ray-box tests still used today.</p></div>
+      <div class="timeline-item"><span class="year">1989</span><h4>MacDonald &amp; Booth: Surface Area Heuristic</h4><p>The SAH is born — using surface area ratios to predict ray hit probabilities and choose optimal split positions.</p></div>
+      <div class="timeline-item"><span class="year">2007</span><h4>Wald: fast BVH construction on CPU</h4><p>Techniques for building high-quality BVHs quickly enough for dynamic scenes. Brings SAH construction under 1 second for million-triangle scenes.</p></div>
+      <div class="timeline-item"><span class="year">2012</span><h4>Karras: parallel BVH on GPU</h4><p>NVIDIA's approach using Morton codes and radix sort. Builds millions of primitives in milliseconds on the GPU.</p></div>
+      <div class="timeline-item"><span class="year">2018</span><h4>three-mesh-bvh v0.1.0</h4><p>Garrett Johnson releases the first version. Initial focus: drop-in accelerated raycasting for web 3D.</p></div>
+      <div class="timeline-item"><span class="year">2020</span><h4>RTX hardware BVH traversal</h4><p>NVIDIA RT cores perform BVH traversal in fixed-function silicon. 10 billion rays/second. BVH goes from software to hardware.</p></div>
+      <div class="timeline-item"><span class="year">2022</span><h4>three-mesh-bvh: shapecast, distance queries</h4><p>The library grows beyond raycasting into a general-purpose spatial query engine.</p></div>
+      <div class="timeline-item"><span class="year">2024</span><h4>v0.7+: GPU path tracing integration</h4><p>BVH encoded into textures for GLSL traversal. Powers three-gpu-pathtracer.</p></div>
+      <div class="timeline-item"><span class="year">2025</span><h4>v0.9: SkinnedMeshBVH, indirect mode</h4><p>BVH for animated meshes with skeletal deformation. Indirect mode preserves the original index buffer.</p></div>
+    </div>
+
+    <!-- ═══════ SECTION 18: Further Reading ═══════ -->
+    <h2 id="reading">Further reading</h2>
+
+    <div class="steps">
+      <div class="step"><div class="step-title">The library</div><p><a href="https://github.com/gkjohnson/three-mesh-bvh" target="_blank">three-mesh-bvh on GitHub</a> — source code, 30+ live examples, full API docs.</p></div>
+      <div class="step"><div class="step-title">PBRT Chapter 4.3</div><p><a href="https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies" target="_blank">Physically Based Rendering: BVH</a> — the gold-standard academic treatment.</p></div>
+      <div class="step"><div class="step-title">Jacco Bikker's tutorial series</div><p><a href="https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/" target="_blank">How to Build a BVH</a> — practical, code-first walkthrough from scratch.</p></div>
+      <div class="step"><div class="step-title">NVIDIA: Tree Traversal on the GPU</div><p><a href="https://developer.nvidia.com/blog/thinking-parallel-part-ii-tree-traversal-gpu" target="_blank">Thinking Parallel, Part II</a> — parallel BVH traversal, stackless algorithms.</p></div>
+      <div class="step"><div class="step-title">Ecosystem</div><p><a href="https://github.com/gkjohnson/three-gpu-pathtracer" target="_blank">three-gpu-pathtracer</a> · <a href="https://github.com/gkjohnson/three-bvh-csg" target="_blank">three-bvh-csg</a></p></div>
+    </div>
+
+    <div class="callout">
+      <div class="callout-title pixel-label">TRY IT YOURSELF</div>
+      <p>
+        Open any Three.js project. <code>npm install three-mesh-bvh</code>.
+        Add three lines of prototype setup. Call <code>geometry.computeBoundsTree()</code>.
+        Watch your raycasting go from sluggish to instant.
+        Three lines of code, orders-of-magnitude improvement.
+      </p>
+    </div>
+  </article>
+
+  <footer>
+    <p>Geo-Instructor · Seeing the geometry beneath everything</p>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SCRIPTS                                                           -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<!-- ── THREE.JS: Hero BVH Scene ── -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+function initScene(canvasId, opts = {}) {
+  const canvas = document.getElementById(canvasId);
+  const box = canvas.parentElement;
+  const w = box.clientWidth;
+  const h = canvas.clientHeight || 380;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0xF4F2F0);
+  const camera = new THREE.PerspectiveCamera(opts.fov || 45, w / h, 0.1, 200);
+  camera.position.set(opts.cx || 0, opts.cy || 2, opts.cz || 5);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+  dir.position.set(3, 8, 5);
+  scene.add(dir);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+  window.addEventListener('resize', () => {
+    const w2 = box.clientWidth;
+    camera.aspect = w2 / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w2, h);
+  });
+  return { renderer, camera, scene, controls, canvas };
+}
+
+(function heroScene() {
+  const { renderer, camera, scene, controls } = initScene('heroCanvas', { cx: 16, cy: 10, cz: 16, fov: 45 });
+  const grid = new THREE.GridHelper(20, 24, 0xD4D0CC, 0xD4D0CC);
+  scene.add(grid);
+  const geom = new THREE.TorusKnotGeometry(4, 1.2, 128, 32);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x2A2622, roughness: 0.65, metalness: 0.05 });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.y = 4;
+  scene.add(mesh);
+  const wire = new THREE.LineSegments(new THREE.WireframeGeometry(geom), new THREE.LineBasicMaterial({ color: 0x2A2622, opacity: 0.08, transparent: true }));
+  wire.position.y = 4;
+  scene.add(wire);
+  const bvhGroup = new THREE.Group();
+  scene.add(bvhGroup);
+
+  function buildVisualBVH(positions, depth, maxDepth, group, meshOffset) {
+    if (depth > maxDepth || positions.length < 9) return;
+    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+    for (let i=0;i<positions.length;i+=3){const x=positions[i],y=positions[i+1]+meshOffset,z=positions[i+2];if(x<minX)minX=x;if(y<minY)minY=y;if(z<minZ)minZ=z;if(x>maxX)maxX=x;if(y>maxY)maxY=y;if(z>maxZ)maxZ=z;}
+    const sx=maxX-minX,sy=maxY-minY,sz=maxZ-minZ,cx=(minX+maxX)/2,cy=(minY+maxY)/2,cz=(minZ+maxZ)/2;
+    const boxGeom=new THREE.BoxGeometry(sx,sy,sz);
+    const edges=new THREE.EdgesGeometry(boxGeom);
+    const opacity=Math.max(0.12,0.55-depth*0.06);
+    const hue=depth*0.08;
+    const color=new THREE.Color().setHSL(0.65-hue,0.7,0.45);
+    const line=new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color,transparent:true,opacity}));
+    line.position.set(cx,cy,cz);
+    line.userData.depth=depth;
+    group.add(line);
+    if(depth>=maxDepth)return;
+    const dims=[sx,sy,sz];const axis=dims.indexOf(Math.max(...dims));
+    const mid=[cx,cy,cz][axis];
+    const left=[],right=[];
+    for(let i=0;i<positions.length;i+=9){
+      const c0=(positions[i+axis]+positions[i+3+axis]+positions[i+6+axis])/3;
+      const triData=[];for(let j=0;j<9;j++)triData.push(positions[i+j]);
+      if(axis===1){if(c0+meshOffset<mid)left.push(...triData);else right.push(...triData);}
+      else{if(c0<mid)left.push(...triData);else right.push(...triData);}
+    }
+    if(left.length>0&&right.length>0){buildVisualBVH(left,depth+1,maxDepth,group,meshOffset);buildVisualBVH(right,depth+1,maxDepth,group,meshOffset);}
+  }
+
+  let currentDepth=3;
+  function rebuildBVH(){while(bvhGroup.children.length){const c=bvhGroup.children[0];c.geometry?.dispose();c.material?.dispose();bvhGroup.remove(c);}buildVisualBVH(Array.from(geom.attributes.position.array),0,currentDepth,bvhGroup,4);}
+  rebuildBVH();
+
+  const depthSlider=document.getElementById('depthSlider');
+  const depthVal=document.getElementById('depthVal');
+  depthSlider.addEventListener('input',()=>{currentDepth=parseInt(depthSlider.value);depthVal.textContent=currentDepth;rebuildBVH();});
+
+  const rayGroup=new THREE.Group();scene.add(rayGroup);
+  const btnBVH=document.getElementById('btnShowBVH');
+  const btnRay=document.getElementById('btnRaycast');
+  btnBVH.addEventListener('click',()=>{btnBVH.classList.add('primary');btnRay.classList.remove('primary');bvhGroup.visible=true;while(rayGroup.children.length){const c=rayGroup.children[0];c.geometry?.dispose();c.material?.dispose();rayGroup.remove(c);}});
+  btnRay.addEventListener('click',()=>{btnRay.classList.add('primary');btnBVH.classList.remove('primary');while(rayGroup.children.length){const c=rayGroup.children[0];c.geometry?.dispose();c.material?.dispose();rayGroup.remove(c);}
+    const rc=new THREE.Raycaster();
+    for(let i=0;i<40;i++){const origin=new THREE.Vector3((Math.random()-0.5)*30,Math.random()*15+1,(Math.random()-0.5)*30);const d=new THREE.Vector3().subVectors(mesh.position,origin).normalize();d.x+=(Math.random()-0.5)*0.4;d.y+=(Math.random()-0.5)*0.4;d.z+=(Math.random()-0.5)*0.4;d.normalize();rc.set(origin,d);const hits=rc.intersectObject(mesh);const end=hits.length>0?hits[0].point:origin.clone().add(d.clone().multiplyScalar(22));const lGeom=new THREE.BufferGeometry().setFromPoints([origin,end]);const lColor=hits.length>0?0x1A1AE5:0xD4D0CC;rayGroup.add(new THREE.Line(lGeom,new THREE.LineBasicMaterial({color:lColor,transparent:true,opacity:0.5})));if(hits.length>0){const dot=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),new THREE.MeshBasicMaterial({color:0xC0392B}));dot.position.copy(hits[0].point);rayGroup.add(dot);}}
+  });
+
+  (function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);})();
+})();
+</script>
+
+<!-- ── 2D CANVAS: BVH Build Step-by-Step ── -->
+<script>
+(function bvhBuildDemo(){
+  const canvas=document.getElementById('bvhBuildCanvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
+  const COLORS=['#E74C3C','#3498DB','#2ECC71','#F39C12','#9B59B6','#1ABC9C','#E67E22','#34495E','#C0392B','#2980B9','#27AE60','#D35400','#8E44AD','#16A085','#F1C40F','#7F8C8D','#E91E63','#00BCD4','#8BC34A','#FF5722','#607D8B','#795548','#CDDC39','#FF9800'];
+  const rng=(lo,hi)=>lo+Math.random()*(hi-lo);
+  let triangles=[],bvhNodes=[],buildQueue=[],currentDepth=0;
+
+  function generateTriangles(){triangles=[];for(let i=0;i<24;i++){const cx=rng(50,W-50),cy=rng(50,H-50),s=rng(12,28);triangles.push({pts:[[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)]],color:COLORS[i%COLORS.length],centroid:[0,0]});}for(const t of triangles)t.centroid=[(t.pts[0][0]+t.pts[1][0]+t.pts[2][0])/3,(t.pts[0][1]+t.pts[1][1]+t.pts[2][1])/3];}
+  generateTriangles();
+
+  function aabb(tris){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const t of tris)for(const p of t.pts){if(p[0]<x0)x0=p[0];if(p[1]<y0)y0=p[1];if(p[0]>x1)x1=p[0];if(p[1]>y1)y1=p[1];}return{x0,y0,x1,y1,w:x1-x0,h:y1-y0};}
+
+  function resetBuild(){bvhNodes=[];buildQueue=[{tris:[...triangles],depth:0}];currentDepth=0;bvhNodes.push({box:aabb(triangles),depth:0});draw();document.getElementById('bvhBuildDepth').textContent='0';}
+  resetBuild();
+
+  function stepBuild(){if(buildQueue.length===0)return;currentDepth++;const nextQueue=[];for(const{tris,depth}of buildQueue){if(tris.length<=2||depth>=6)continue;const box=aabb(tris);const axis=box.w>=box.h?0:1;const sorted=[...tris].sort((a,b)=>a.centroid[axis]-b.centroid[axis]);const mid=Math.ceil(sorted.length/2);const left=sorted.slice(0,mid),right=sorted.slice(mid);if(left.length>0&&right.length>0){bvhNodes.push({box:aabb(left),depth:depth+1});bvhNodes.push({box:aabb(right),depth:depth+1});nextQueue.push({tris:left,depth:depth+1});nextQueue.push({tris:right,depth:depth+1});}}buildQueue=nextQueue;document.getElementById('bvhBuildDepth').textContent=currentDepth;draw();}
+
+  function buildAll(){for(let i=0;i<8;i++)stepBuild();}
+
+  function draw(){ctx.fillStyle='#F4F2F0';ctx.fillRect(0,0,W,H);for(const t of triangles){ctx.beginPath();ctx.moveTo(t.pts[0][0],t.pts[0][1]);ctx.lineTo(t.pts[1][0],t.pts[1][1]);ctx.lineTo(t.pts[2][0],t.pts[2][1]);ctx.closePath();ctx.fillStyle=t.color+'55';ctx.fill();ctx.strokeStyle=t.color;ctx.lineWidth=1.5;ctx.stroke();ctx.beginPath();ctx.arc(t.centroid[0],t.centroid[1],2.5,0,Math.PI*2);ctx.fillStyle=t.color;ctx.fill();}
+    for(const n of bvhNodes){const opacity=Math.max(0.2,0.8-n.depth*0.12);const hue=240-n.depth*25;ctx.strokeStyle=`hsla(${hue},70%,45%,${opacity})`;ctx.lineWidth=Math.max(1,3-n.depth*0.4);ctx.setLineDash(n.depth===0?[]:[4,3]);ctx.strokeRect(n.box.x0-2,n.box.y0-2,n.box.w+4,n.box.h+4);}ctx.setLineDash([]);}
+
+  document.getElementById('btnBvhStep').addEventListener('click',stepBuild);
+  document.getElementById('btnBvhReset').addEventListener('click',()=>{generateTriangles();resetBuild();});
+  document.getElementById('btnBvhAll').addEventListener('click',buildAll);
+})();
+</script>
+
+<!-- ── SAH vs Median Comparison Demo ── -->
+<script>
+(function sahCompare(){
+  const canvas=document.getElementById('sahCompareCanvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
+  const rng=(lo,hi)=>lo+Math.random()*(hi-lo);
+  let tris=[];
+
+  function genTris(){tris=[];
+    // Cluster 1 (left, dense)
+    for(let i=0;i<15;i++){const cx=rng(40,160),cy=rng(30,H-30),s=rng(8,18);tris.push({pts:[[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)]],centroid:[0,0]});}
+    // Cluster 2 (right, sparse)
+    for(let i=0;i<8;i++){const cx=rng(200,W/2-20),cy=rng(30,H-30),s=rng(10,22);tris.push({pts:[[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)]],centroid:[0,0]});}
+    for(const t of tris)t.centroid=[(t.pts[0][0]+t.pts[1][0]+t.pts[2][0])/3,(t.pts[0][1]+t.pts[1][1]+t.pts[2][1])/3];
+  }
+  genTris();
+
+  function aabb(ts){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const t of ts)for(const p of t.pts){if(p[0]<x0)x0=p[0];if(p[1]<y0)y0=p[1];if(p[0]>x1)x1=p[0];if(p[1]>y1)y1=p[1];}return{x0,y0,x1,y1};}
+  function sa(b){return 2*((b.x1-b.x0)+(b.y1-b.y0));}
+
+  function buildMedian(ts,d){const box=aabb(ts);if(ts.length<=2||d>=5)return{box,tris:ts,leaf:true};const w=box.x1-box.x0,h=box.y1-box.y0;const axis=w>=h?0:1;const sorted=[...ts].sort((a,b)=>a.centroid[axis]-b.centroid[axis]);const mid=Math.ceil(sorted.length/2);return{box,leaf:false,left:buildMedian(sorted.slice(0,mid),d+1),right:buildMedian(sorted.slice(mid),d+1)};}
+
+  function buildSAH(ts,d){const box=aabb(ts);if(ts.length<=2||d>=5)return{box,tris:ts,leaf:true};let bestCost=Infinity,bestAxis=0,bestPos=0;
+    for(let axis=0;axis<2;axis++){const sorted=[...ts].sort((a,b)=>a.centroid[axis]-b.centroid[axis]);for(let i=1;i<sorted.length;i++){const lb=aabb(sorted.slice(0,i)),rb=aabb(sorted.slice(i));const cost=sa(lb)*i+sa(rb)*(sorted.length-i);if(cost<bestCost){bestCost=cost;bestAxis=axis;bestPos=i;}}}
+    const sorted=[...ts].sort((a,b)=>a.centroid[bestAxis]-b.centroid[bestAxis]);return{box,leaf:false,left:buildSAH(sorted.slice(0,bestPos),d+1),right:buildSAH(sorted.slice(bestPos),d+1)};}
+
+  function countNodes(n){return 1+(n.leaf?0:countNodes(n.left)+countNodes(n.right));}
+  function rayBox(ox,oy,dx,dy,b){let tmin=-Infinity,tmax=Infinity;if(dx!==0){let t1=(b.x0-ox)/dx,t2=(b.x1-ox)/dx;if(t1>t2)[t1,t2]=[t2,t1];tmin=Math.max(tmin,t1);tmax=Math.min(tmax,t2);}else if(ox<b.x0||ox>b.x1)return-1;if(dy!==0){let t1=(b.y0-oy)/dy,t2=(b.y1-oy)/dy;if(t1>t2)[t1,t2]=[t2,t1];tmin=Math.max(tmin,t1);tmax=Math.min(tmax,t2);}else if(oy<b.y0||oy>b.y1)return-1;if(tmin>tmax||tmax<0)return-1;return tmin>=0?tmin:tmax;}
+  function traverse(node,ox,oy,dx,dy,visited){const t=rayBox(ox,oy,dx,dy,node.box);if(t<0)return;visited.push(node);if(!node.leaf){traverse(node.left,ox,oy,dx,dy,visited);traverse(node.right,ox,oy,dx,dy,visited);}}
+
+  let medianVisited=0,sahVisited=0;
+
+  function draw(){
+    ctx.fillStyle='#F4F2F0';ctx.fillRect(0,0,W,H);
+    // Divider
+    ctx.strokeStyle='#D4D0CC';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#8A857E';ctx.font='10px "JetBrains Mono"';ctx.textAlign='center';
+    ctx.fillText('MEDIAN SPLIT',W/4,16);ctx.fillText('SAH SPLIT',3*W/4,16);
+    // Draw tris on both sides
+    for(const t of tris){for(let side=0;side<2;side++){const ox=side*(W/2);ctx.beginPath();ctx.moveTo(t.pts[0][0]+ox,t.pts[0][1]);ctx.lineTo(t.pts[1][0]+ox,t.pts[1][1]);ctx.lineTo(t.pts[2][0]+ox,t.pts[2][1]);ctx.closePath();ctx.fillStyle='#2A262218';ctx.fill();ctx.strokeStyle='#2A262250';ctx.lineWidth=1;ctx.stroke();}}
+  }
+  draw();
+
+  document.getElementById('btnSahCast').addEventListener('click',()=>{
+    const medianTree=buildMedian(tris,0),sahTree=buildSAH(tris,0);
+    let totalMedian=0,totalSah=0;
+    draw();
+    for(let r=0;r<10;r++){
+      const oy=rng(20,H-20),dx=1,dy=rng(-0.3,0.3);const len=Math.sqrt(dx*dx+dy*dy);const ndx=dx/len,ndy=dy/len;
+      const mVis=[],sVis=[];traverse(medianTree,0,oy,ndx,ndy,mVis);traverse(sahTree,0,oy,ndx,ndy,sVis);totalMedian+=mVis.length;totalSah+=sVis.length;
+      // Draw on left (median)
+      for(const n of mVis){ctx.strokeStyle='#1A1AE540';ctx.lineWidth=1.5;ctx.strokeRect(n.box.x0,n.box.y0,n.box.x1-n.box.x0,n.box.y1-n.box.y0);}
+      ctx.beginPath();ctx.moveTo(0,oy);ctx.lineTo(W/2,oy+ndy*(W/2));ctx.strokeStyle='#C0392B60';ctx.lineWidth=1;ctx.stroke();
+      // Draw on right (SAH)
+      for(const n of sVis){ctx.strokeStyle='#27AE6040';ctx.lineWidth=1.5;ctx.strokeRect(n.box.x0+W/2,n.box.y0,n.box.x1-n.box.x0,n.box.y1-n.box.y0);}
+      ctx.beginPath();ctx.moveTo(W/2,oy);ctx.lineTo(W,oy+ndy*(W/2));ctx.strokeStyle='#C0392B60';ctx.lineWidth=1;ctx.stroke();
+    }
+    document.getElementById('sahStats').textContent=`10 rays — Median: ${totalMedian} nodes visited | SAH: ${totalSah} nodes visited (${Math.round((1-totalSah/totalMedian)*100)}% fewer)`;
+  });
+  document.getElementById('btnSahRegen').addEventListener('click',()=>{genTris();draw();document.getElementById('sahStats').textContent='Click "Cast 10 Rays" to compare.';});
+})();
+</script>
+
+<!-- ── Slab Test Visualization ── -->
+<script>
+(function slabDemo(){
+  const canvas=document.getElementById('slabCanvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
+  const box={x0:250,y0:100,x1:450,y1:250};
+  let rayOx=80,rayOy=280,rayDx=0.85,rayDy=-0.52;
+  let dragging=false;
+
+  function draw(){
+    ctx.fillStyle='#F4F2F0';ctx.fillRect(0,0,W,H);
+    // Box
+    ctx.strokeStyle='#2A2622';ctx.lineWidth=2;ctx.strokeRect(box.x0,box.y0,box.x1-box.x0,box.y1-box.y0);
+    ctx.fillStyle='#2A262208';ctx.fillRect(box.x0,box.y0,box.x1-box.x0,box.y1-box.y0);
+    // Slab regions
+    const tXEnter=(box.x0-rayOx)/rayDx,tXExit=(box.x1-rayOx)/rayDx;
+    const tYEnter=(box.y0-rayOy)/rayDy,tYExit=(box.y1-rayOy)/rayDy;
+    const txMin=Math.min(tXEnter,tXExit),txMax=Math.max(tXEnter,tXExit);
+    const tyMin=Math.min(tYEnter,tYExit),tyMax=Math.max(tYEnter,tYExit);
+    const tEnter=Math.max(txMin,tyMin),tExit=Math.min(txMax,tyMax);
+    // Draw ray
+    const rayLen=800;
+    ctx.beginPath();ctx.moveTo(rayOx,rayOy);ctx.lineTo(rayOx+rayDx*rayLen,rayOy+rayDy*rayLen);ctx.strokeStyle='#8A857E';ctx.lineWidth=1;ctx.stroke();
+    // X-slab interval
+    if(txMax>0){const s=Math.max(0,txMin);ctx.beginPath();ctx.moveTo(rayOx+rayDx*s,rayOy+rayDy*s);ctx.lineTo(rayOx+rayDx*txMax,rayOy+rayDy*txMax);ctx.strokeStyle='#E67E22';ctx.lineWidth=6;ctx.globalAlpha=0.4;ctx.stroke();ctx.globalAlpha=1;}
+    // Y-slab interval
+    if(tyMax>0){const s=Math.max(0,tyMin);ctx.beginPath();ctx.moveTo(rayOx+rayDx*s,rayOy+rayDy*s);ctx.lineTo(rayOx+rayDx*tyMax,rayOy+rayDy*tyMax);ctx.strokeStyle='#3498DB';ctx.lineWidth=6;ctx.globalAlpha=0.3;ctx.stroke();ctx.globalAlpha=1;}
+    // Intersection
+    if(tEnter<=tExit&&tExit>=0){const s=Math.max(0,tEnter);ctx.beginPath();ctx.moveTo(rayOx+rayDx*s,rayOy+rayDy*s);ctx.lineTo(rayOx+rayDx*tExit,rayOy+rayDy*tExit);ctx.strokeStyle='#27AE60';ctx.lineWidth=4;ctx.stroke();
+      ctx.beginPath();ctx.arc(rayOx+rayDx*s,rayOy+rayDy*s,5,0,Math.PI*2);ctx.fillStyle='#27AE60';ctx.fill();
+      ctx.beginPath();ctx.arc(rayOx+rayDx*tExit,rayOy+rayDy*tExit,5,0,Math.PI*2);ctx.fillStyle='#27AE60';ctx.fill();}
+    // Ray origin
+    ctx.beginPath();ctx.arc(rayOx,rayOy,8,0,Math.PI*2);ctx.fillStyle='#C0392B';ctx.fill();
+    ctx.fillStyle='#2A2622';ctx.font='11px "JetBrains Mono"';ctx.textAlign='left';
+    ctx.fillText(tEnter<=tExit&&tExit>=0?`HIT: t_enter=${tEnter.toFixed(1)}, t_exit=${tExit.toFixed(1)}`:'MISS',12,20);
+  }
+  draw();
+
+  canvas.addEventListener('mousedown',e=>{const r=canvas.getBoundingClientRect();const mx=(e.clientX-r.left)*(W/r.width),my=(e.clientY-r.top)*(H/r.height);if(Math.hypot(mx-rayOx,my-rayOy)<20)dragging=true;});
+  canvas.addEventListener('mousemove',e=>{if(!dragging)return;const r=canvas.getBoundingClientRect();rayOx=(e.clientX-r.left)*(W/r.width);rayOy=(e.clientY-r.top)*(H/r.height);const cx=(box.x0+box.x1)/2,cy=(box.y0+box.y1)/2;const dx=cx-rayOx,dy=cy-rayOy;const len=Math.sqrt(dx*dx+dy*dy);rayDx=dx/len;rayDy=dy/len;draw();});
+  canvas.addEventListener('mouseup',()=>dragging=false);
+  canvas.addEventListener('mouseleave',()=>dragging=false);
+})();
+</script>
+
+<!-- ── Ray Traversal Demo ── -->
+<script>
+(function rayTraversalDemo(){
+  const canvas=document.getElementById('rayTraversalCanvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
+  const rng=(lo,hi)=>lo+Math.random()*(hi-lo);
+  const TRIS=[];for(let i=0;i<30;i++){const cx=rng(60,W-60),cy=rng(60,H-60),s=rng(10,22);TRIS.push({pts:[[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)],[cx+rng(-s,s),cy+rng(-s,s)]],centroid:[0,0]});const t=TRIS[TRIS.length-1];t.centroid=[(t.pts[0][0]+t.pts[1][0]+t.pts[2][0])/3,(t.pts[0][1]+t.pts[1][1]+t.pts[2][1])/3];}
+
+  function aabb(ts){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const t of ts)for(const p of t.pts){if(p[0]<x0)x0=p[0];if(p[1]<y0)y0=p[1];if(p[0]>x1)x1=p[0];if(p[1]>y1)y1=p[1];}return{x0:x0-2,y0:y0-2,x1:x1+2,y1:y1+2};}
+  function buildNode(ts,d){const box=aabb(ts);if(ts.length<=2||d>=6)return{box,tris:ts,leaf:true,depth:d};const w=box.x1-box.x0,h=box.y1-box.y0;const axis=w>=h?0:1;const sorted=[...ts].sort((a,b)=>a.centroid[axis]-b.centroid[axis]);const mid=Math.ceil(sorted.length/2);return{box,depth:d,leaf:false,left:buildNode(sorted.slice(0,mid),d+1),right:buildNode(sorted.slice(mid),d+1),tris:ts};}
+  const root=buildNode(TRIS,0);
+
+  function rayBoxI(ox,oy,dx,dy,b){let tmin=-Infinity,tmax=Infinity;if(dx!==0){let t1=(b.x0-ox)/dx,t2=(b.x1-ox)/dx;if(t1>t2)[t1,t2]=[t2,t1];tmin=Math.max(tmin,t1);tmax=Math.min(tmax,t2);}else if(ox<b.x0||ox>b.x1)return-1;if(dy!==0){let t1=(b.y0-oy)/dy,t2=(b.y1-oy)/dy;if(t1>t2)[t1,t2]=[t2,t1];tmin=Math.max(tmin,t1);tmax=Math.min(tmax,t2);}else if(oy<b.y0||oy>b.y1)return-1;if(tmin>tmax||tmax<0)return-1;return tmin>=0?tmin:tmax;}
+  function rayTriI(ox,oy,dx,dy,pts){let bestT=Infinity;for(let i=0;i<3;i++){const[ax,ay]=pts[i],[bx,by]=pts[(i+1)%3];const ex=bx-ax,ey=by-ay,denom=dx*ey-dy*ex;if(Math.abs(denom)<1e-10)continue;const t=((ax-ox)*ey-(ay-oy)*ex)/denom,u=((ax-ox)*dy-(ay-oy)*dx)/denom;if(t>0.001&&u>=0&&u<=1&&t<bestT)bestT=t;}return bestT<Infinity?bestT:-1;}
+
+  let visitedBoxes=[],hitTri=null,rayOrigin=null,rayDir=null;
+  function countNodes(n){return 1+(n.leaf?0:countNodes(n.left)+countNodes(n.right));}
+  const totalBoxes=countNodes(root);
+  function traverseRay(node,ox,oy,dx,dy){const t=rayBoxI(ox,oy,dx,dy,node.box);if(t<0)return;visitedBoxes.push(node);if(node.leaf){for(const tri of node.tris){const ht=rayTriI(ox,oy,dx,dy,tri.pts);if(ht>0&&(!hitTri||ht<hitTri.t))hitTri={tri,t:ht};}return;}traverseRay(node.left,ox,oy,dx,dy);traverseRay(node.right,ox,oy,dx,dy);}
+
+  function draw(){ctx.fillStyle='#F4F2F0';ctx.fillRect(0,0,W,H);
+    function drawAll(n){ctx.strokeStyle='#D4D0CC';ctx.lineWidth=0.5;ctx.strokeRect(n.box.x0,n.box.y0,n.box.x1-n.box.x0,n.box.y1-n.box.y0);if(!n.leaf){drawAll(n.left);drawAll(n.right);}}drawAll(root);
+    for(const t of TRIS){ctx.beginPath();ctx.moveTo(t.pts[0][0],t.pts[0][1]);ctx.lineTo(t.pts[1][0],t.pts[1][1]);ctx.lineTo(t.pts[2][0],t.pts[2][1]);ctx.closePath();ctx.fillStyle='#2A262215';ctx.fill();ctx.strokeStyle='#2A262240';ctx.lineWidth=1;ctx.stroke();}
+    for(const n of visitedBoxes){const b=n.box;ctx.strokeStyle='#1A1AE5';ctx.lineWidth=2;ctx.strokeRect(b.x0,b.y0,b.x1-b.x0,b.y1-b.y0);ctx.fillStyle='#1A1AE508';ctx.fillRect(b.x0,b.y0,b.x1-b.x0,b.y1-b.y0);}
+    if(hitTri){ctx.beginPath();ctx.moveTo(hitTri.tri.pts[0][0],hitTri.tri.pts[0][1]);ctx.lineTo(hitTri.tri.pts[1][0],hitTri.tri.pts[1][1]);ctx.lineTo(hitTri.tri.pts[2][0],hitTri.tri.pts[2][1]);ctx.closePath();ctx.fillStyle='#C0392B44';ctx.fill();ctx.strokeStyle='#C0392B';ctx.lineWidth=2.5;ctx.stroke();}
+    if(rayOrigin&&rayDir){const len=hitTri?hitTri.t:1200;ctx.beginPath();ctx.moveTo(rayOrigin[0],rayOrigin[1]);ctx.lineTo(rayOrigin[0]+rayDir[0]*len,rayOrigin[1]+rayDir[1]*len);ctx.strokeStyle='#1A1AE580';ctx.lineWidth=1.5;ctx.stroke();if(hitTri){const hx=rayOrigin[0]+rayDir[0]*hitTri.t,hy=rayOrigin[1]+rayDir[1]*hitTri.t;ctx.beginPath();ctx.arc(hx,hy,5,0,Math.PI*2);ctx.fillStyle='#C0392B';ctx.fill();}}}
+  draw();
+
+  function countVisitedTris(){let n=0;for(const node of visitedBoxes)if(node.leaf)n+=node.tris.length;return n;}
+  canvas.addEventListener('click',e=>{const rect=canvas.getBoundingClientRect();const mx=(e.clientX-rect.left)*(W/rect.width),my=(e.clientY-rect.top)*(H/rect.height);rayOrigin=[0,my+rng(-40,40)];const dx=mx-rayOrigin[0],dy=my-rayOrigin[1];const len=Math.sqrt(dx*dx+dy*dy);rayDir=[dx/len,dy/len];visitedBoxes=[];hitTri=null;traverseRay(root,rayOrigin[0],rayOrigin[1],rayDir[0],rayDir[1]);document.getElementById('rayStats').textContent=`Boxes tested: ${visitedBoxes.length} / ${totalBoxes}. Triangles tested: ${countVisitedTris()} / ${TRIS.length}. ${hitTri?'HIT!':'Miss.'}`;draw();});
+})();
+</script>
+
+<!-- ── Closest Point Demo ── -->
+<script>
+(function closestPointDemo(){
+  const canvas=document.getElementById('closestPointCanvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
+  // Create a polygon boundary (line segments acting as "mesh edges")
+  const segments=[];const cx=W/2,cy=H/2,r=120,n=20;
+  for(let i=0;i<n;i++){const a1=i*Math.PI*2/n,a2=(i+1)*Math.PI*2/n;const r1=r+Math.sin(i*3.7)*40,r2=r+Math.sin((i+1)*3.7)*40;segments.push({p1:[cx+Math.cos(a1)*r1,cy+Math.sin(a1)*r1],p2:[cx+Math.cos(a2)*r2,cy+Math.sin(a2)*r2],centroid:[0,0]});}
+  for(const s of segments)s.centroid=[(s.p1[0]+s.p2[0])/2,(s.p1[1]+s.p2[1])/2];
+
+  function aabb(segs){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const s of segs){for(const p of[s.p1,s.p2]){if(p[0]<x0)x0=p[0];if(p[1]<y0)y0=p[1];if(p[0]>x1)x1=p[0];if(p[1]>y1)y1=p[1];}}return{x0,y0,x1,y1};}
+  function distToBox(px,py,b){let dx=Math.max(b.x0-px,0,px-b.x1),dy=Math.max(b.y0-py,0,py-b.y1);return Math.sqrt(dx*dx+dy*dy);}
+  function distToSeg(px,py,s){const[ax,ay]=s.p1,[bx,by]=s.p2;const dx=bx-ax,dy=by-ay;const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));const cx2=ax+t*dx,cy2=ay+t*dy;return{dist:Math.sqrt((px-cx2)**2+(py-cy2)**2),point:[cx2,cy2]};}
+
+  function buildNode(segs,d){const box=aabb(segs);if(segs.length<=2||d>=6)return{box,segs,leaf:true};const w=box.x1-box.x0,h=box.y1-box.y0;const axis=w>=h?0:1;const sorted=[...segs].sort((a,b)=>a.centroid[axis]-b.centroid[axis]);const mid=Math.ceil(sorted.length/2);return{box,leaf:false,left:buildNode(sorted.slice(0,mid),d+1),right:buildNode(sorted.slice(mid),d+1)};}
+  const root=buildNode(segments,0);
+
+  let visited=[],queryPoint=null,closestPt=null,searchRadius=0;
+  function countNodes(n){return 1+(n.leaf?0:countNodes(n.left)+countNodes(n.right));}
+  const totalNodes=countNodes(root);
+
+  function findClosest(px,py,node,best){
+    const bd=distToBox(px,py,node.box);if(bd>best.dist)return best;
+    visited.push(node);
+    if(node.leaf){for(const s of node.segs){const r=distToSeg(px,py,s);if(r.dist<best.dist){best={dist:r.dist,point:r.point};}}return best;}
+    const dl=distToBox(px,py,node.left.box),dr=distToBox(px,py,node.right.box);
+    const[near,far]=dl<dr?[node.left,node.right]:[node.right,node.left];
+    best=findClosest(px,py,near,best);best=findClosest(px,py,far,best);return best;
+  }
+
+  function draw(){
+    ctx.fillStyle='#F4F2F0';ctx.fillRect(0,0,W,H);
+    // Draw all BVH boxes faint
+    function drawBoxes(n){ctx.strokeStyle='#E8E5E0';ctx.lineWidth=0.5;ctx.strokeRect(n.box.x0,n.box.y0,n.box.x1-n.box.x0,n.box.y1-n.box.y0);if(!n.leaf){drawBoxes(n.left);drawBoxes(n.right);}}drawBoxes(root);
+    // Draw visited boxes
+    for(const n of visited){ctx.strokeStyle='#1A1AE5';ctx.lineWidth=1.5;ctx.strokeRect(n.box.x0,n.box.y0,n.box.x1-n.box.x0,n.box.y1-n.box.y0);}
+    // Draw segments
+    for(const s of segments){ctx.beginPath();ctx.moveTo(s.p1[0],s.p1[1]);ctx.lineTo(s.p2[0],s.p2[1]);ctx.strokeStyle='#2A2622';ctx.lineWidth=2;ctx.stroke();}
+    // Query
+    if(queryPoint){
+      ctx.beginPath();ctx.arc(queryPoint[0],queryPoint[1],5,0,Math.PI*2);ctx.fillStyle='#C0392B';ctx.fill();
+      if(closestPt){ctx.beginPath();ctx.arc(closestPt[0],closestPt[1],5,0,Math.PI*2);ctx.fillStyle='#27AE60';ctx.fill();
+        ctx.beginPath();ctx.moveTo(queryPoint[0],queryPoint[1]);ctx.lineTo(closestPt[0],closestPt[1]);ctx.strokeStyle='#27AE6080';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+        // Search radius circle
+        ctx.beginPath();ctx.arc(queryPoint[0],queryPoint[1],searchRadius,0,Math.PI*2);ctx.strokeStyle='#C0392B30';ctx.lineWidth=1;ctx.stroke();
+      }
+    }
+  }
+  draw();
+
+  canvas.addEventListener('mousemove',e=>{const rect=canvas.getBoundingClientRect();const mx=(e.clientX-rect.left)*(W/rect.width),my=(e.clientY-rect.top)*(H/rect.height);queryPoint=[mx,my];visited=[];const result=findClosest(mx,my,root,{dist:Infinity,point:null});closestPt=result.point;searchRadius=result.dist;draw();document.getElementById('closestStats').textContent=`Nodes visited: ${visited.length} / ${totalNodes}. Distance: ${result.dist.toFixed(1)}px`;});
+})();
+</script>
+
+<!-- ── Performance Chart ── -->
+<script>
+(function perfChart(){
+  const canvas=document.getElementById('perfCanvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
+  const data=[{label:'1K tris',brute:1.2,bvh:0.01},{label:'10K tris',brute:12,bvh:0.02},{label:'50K tris',brute:58,bvh:0.03},{label:'100K tris',brute:120,bvh:0.04},{label:'500K tris',brute:600,bvh:0.06}];
+  const pad={top:40,bottom:50,left:95,right:40};const chartW=W-pad.left-pad.right,chartH=H-pad.top-pad.bottom,maxVal=650;
+  ctx.fillStyle='#F4F2F0';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#2A2622';ctx.font='600 11px "JetBrains Mono", monospace';ctx.textAlign='center';ctx.fillText('Time per ray (ms)',W/2,22);
+  ctx.strokeStyle='#e0ddd8';ctx.lineWidth=0.5;
+  for(let i=0;i<=5;i++){const x=pad.left+(chartW*i/5);ctx.beginPath();ctx.moveTo(x,pad.top);ctx.lineTo(x,pad.top+chartH);ctx.stroke();ctx.fillStyle='#8A857E';ctx.font='10px "JetBrains Mono"';ctx.textAlign='center';ctx.fillText((maxVal*i/5).toFixed(0),x,pad.top+chartH+16);}
+  const barH=chartH/data.length,halfBar=barH/2-4;
+  data.forEach((d,i)=>{const y=pad.top+i*barH;ctx.fillStyle='#2A2622';ctx.font='11px "JetBrains Mono"';ctx.textAlign='right';ctx.fillText(d.label,pad.left-12,y+barH/2+4);
+    const bruteW=Math.max(2,(d.brute/maxVal)*chartW);ctx.fillStyle='#C0392B30';ctx.fillRect(pad.left,y+4,bruteW,halfBar);ctx.strokeStyle='#C0392B';ctx.lineWidth=1;ctx.strokeRect(pad.left,y+4,bruteW,halfBar);
+    const bvhW=Math.max(3,(d.bvh/maxVal)*chartW);ctx.fillStyle='#1A1AE530';ctx.fillRect(pad.left,y+halfBar+8,bvhW,halfBar);ctx.strokeStyle='#1A1AE5';ctx.strokeRect(pad.left,y+halfBar+8,bvhW,halfBar);
+    ctx.fillStyle='#C0392B';ctx.font='10px "JetBrains Mono"';ctx.textAlign='left';ctx.fillText(d.brute+' ms',pad.left+bruteW+6,y+halfBar);
+    ctx.fillStyle='#1A1AE5';ctx.fillText(d.bvh+' ms',pad.left+bvhW+6,y+barH-6);
+    ctx.fillStyle='#8A857E';ctx.font='9px Inter';ctx.textAlign='right';ctx.fillText(Math.round(d.brute/d.bvh)+'×',W-10,y+barH/2+3);});
+  const ly=H-14;ctx.fillStyle='#C0392B';ctx.fillRect(pad.left,ly,12,8);ctx.fillStyle='#8A857E';ctx.font='10px Inter';ctx.textAlign='left';ctx.fillText('Brute force',pad.left+16,ly+8);
+  ctx.fillStyle='#1A1AE5';ctx.fillRect(pad.left+110,ly,12,8);ctx.fillStyle='#8A857E';ctx.fillText('BVH (three-mesh-bvh)',pad.left+126,ly+8);
+})();
+</script>
+
+</body>
+</html>
