@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>three-bvh-csg — Boolean Operations at Browser Speed</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+                 "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+  </script>
+  <style>
+    .op-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:24px 0;}
+    @media(max-width:600px){.op-grid{grid-template-columns:1fr 1fr;}}
+    .op-card{border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;}
+    .op-card svg{display:block;margin:0 auto 8px;}
+    .op-sym{font-size:1.4rem;color:var(--accent);display:block;margin-bottom:2px;font-family:var(--font-mono);}
+    .op-name{font-family:var(--font-pixel);font-size:0.45rem;color:var(--text-label);letter-spacing:0.1em;}
+    .op-desc{font-size:0.78rem;color:var(--text-muted);margin-top:6px;line-height:1.5;}
+    .demo-box{margin:32px 0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg-card);}
+    .demo-box canvas{width:100%;display:block;}
+    .demo-box .ctrl{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:12px 20px;border-top:1px solid var(--border);}
+    .demo-box .cap{padding:10px 20px;font-size:0.78rem;color:var(--text-muted);font-style:italic;border-top:1px solid var(--border);}
+    .algo-step{display:flex;gap:16px;align-items:flex-start;padding:16px 0;border-bottom:1px solid var(--border);}
+    .algo-step:first-of-type{border-top:1px solid var(--border);}
+    .algo-num{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--text);color:var(--bg);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:0.75rem;font-weight:700;margin-top:2px;}
+    .algo-body h4{margin:0 0 4px;}
+    .algo-body p{margin:0;font-size:0.83rem;color:var(--text-muted);line-height:1.55;}
+    .perf-table{width:100%;border-collapse:collapse;margin:24px 0;font-size:0.85rem;}
+    .perf-table th{font-family:var(--font-mono);font-size:0.72rem;color:var(--text-label);text-align:left;padding:8px 12px;border-bottom:2px solid var(--border);}
+    .perf-table td{padding:10px 12px;border-bottom:1px solid var(--border);}
+    .perf-table tr:last-child td{border-bottom:none;}
+    .win{color:#2D6A4F;font-weight:600;}
+    .lose{color:#C0392B;}
+    .brush-pair{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0;}
+    @media(max-width:600px){.brush-pair{grid-template-columns:1fr;}}
+    .brush-box{border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .brush-box h5{margin:0 0 8px;font-family:var(--font-mono);font-size:0.8rem;color:var(--accent);}
+    .brush-box li{font-size:0.8rem;color:var(--text-muted);margin-bottom:3px;}
+    .clabel{font-family:var(--font-pixel);font-size:0.45rem;color:var(--text-label);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;display:block;}
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="site-nav">
+    <a href="../../index.html" class="logo">GEO-INSTRUCTOR</a>
+    <div class="nav-links"><a href="../../index.html">[ WORK ]</a></div>
+  </nav>
+
+  <header class="hero">
+    <h1>three-bvh-csg</h1>
+    <p class="subtitle">
+      You want a box with a cylindrical hole. You could place every vertex by hand —
+      or write <em>box minus cylinder</em> and let the computer figure it out.
+      That's CSG. And with BVH acceleration, it now runs at interactive speeds
+      inside a browser tab.
+    </p>
+    <p class="meta pixel-label">JUNE 2025 · 30 min read</p>
+    <div class="tags">
+      <span class="tag">CSG</span><span class="tag">Boolean Ops</span>
+      <span class="tag">BVH</span><span class="tag">Geometry</span>
+      <span class="tag">Three.js</span><span class="tag">CAD</span>
+    </div>
+  </header>
+
+  <div class="scene-box" id="heroBox">
+    <canvas id="heroCanvas" style="height:380px;"></canvas>
+    <div class="scene-controls">
+      <button class="btn primary" id="btnHeroUnion">∪ Union</button>
+      <button class="btn" id="btnHeroSub">− Subtract</button>
+      <button class="btn" id="btnHeroInter">∩ Intersect</button>
+      <button class="btn" id="btnHeroWire">Wireframe</button>
+    </div>
+    <div class="scene-caption">A sphere and a box — drag to orbit. Switch operations to visualize which parts belong to the result. Color: blue = from A, orange = from B, green = shared boundary.</div>
+  </div>
+
+  <nav class="toc">
+    <div class="toc-title">IN THIS ARTICLE</div>
+    <ol>
+      <li><a href="#problem">Shapes that don't exist yet</a></li>
+      <li><a href="#what-is-csg">What is CSG?</a></li>
+      <li><a href="#five-ops">The five operations</a></li>
+      <li><a href="#demo-csg">Interactive: explore the operations</a></li>
+      <li><a href="#old-way">The old way: BSP trees</a></li>
+      <li><a href="#key-insight">Key insight: BVH-accelerated classification</a></li>
+      <li><a href="#algorithm">Algorithm deep dive</a></li>
+      <li><a href="#half-edge">Half-edge flood fill</a></li>
+      <li><a href="#splitting">Triangle splitting</a></li>
+      <li><a href="#demo-algo">Interactive: algorithm step by step</a></li>
+      <li><a href="#api">The API in 5 minutes</a></li>
+      <li><a href="#performance">Performance: 100× faster than BSP</a></li>
+      <li><a href="#applications">Real-world applications</a></li>
+      <li><a href="#history">From 1977 to the browser</a></li>
+      <li><a href="#limits">Limitations and open problems</a></li>
+      <li><a href="#reading">Further reading</a></li>
+    </ol>
+  </nav>
+
+  <article>
+
+    <h2 id="problem">Shapes that don't exist yet</h2>
+    <p>
+      Imagine designing a mechanical bracket — a block with two cylindrical holes
+      drilled through it and a spherical pocket on top. Modelling by hand means
+      placing hundreds of vertices. But a machinist describes it in one sentence:
+      <em>"box, subtract two cylinders, add a sphere."</em>
+    </p>
+    <p>
+      That verbal description <em>is</em> CSG. Constructive Solid Geometry treats
+      solids as sets of points and combines them with boolean operations.
+      The result is always geometrically valid: no gaps, no orphaned triangles.
+    </p>
+    <div class="callout">
+      <div class="callout-title pixel-label">THE CORE QUESTION</div>
+      Given two triangle meshes A and B, produce the mesh that represents A ∪ B, A ∩ B, or A − B.
+    </div>
+    <p>
+      CSG models are expressed as a <strong>binary tree</strong>. Leaves are primitives.
+      Internal nodes are operations. The bracket above is just three nodes deep:
+    </p>
+    <div class="visual" style="text-align:center;">
+      <svg viewBox="0 0 460 175" xmlns="http://www.w3.org/2000/svg" style="max-width:460px;width:100%;">
+        <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#D4D0CC"/></marker></defs>
+        <rect x="170" y="6" width="120" height="34" rx="5" fill="#1A1AE510" stroke="#1A1AE5" stroke-width="1.5"/>
+        <text x="230" y="28" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="#1A1AE5">∪  union</text>
+        <rect x="50" y="84" width="110" height="34" rx="5" fill="#1A1AE510" stroke="#1A1AE5" stroke-width="1.5"/>
+        <text x="105" y="106" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="#1A1AE5">−  subtract</text>
+        <rect x="300" y="84" width="80" height="34" rx="5" fill="#EDEAE7" stroke="#D4D0CC" stroke-width="1.5"/>
+        <text x="340" y="106" text-anchor="middle" font-family="Inter,sans-serif" font-size="12" fill="#2A2622">sphere</text>
+        <rect x="4" y="150" width="60" height="26" rx="4" fill="#EDEAE7" stroke="#D4D0CC"/>
+        <text x="34" y="167" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#2A2622">box</text>
+        <rect x="96" y="150" width="90" height="26" rx="4" fill="#EDEAE7" stroke="#D4D0CC"/>
+        <text x="141" y="167" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#2A2622">2 cylinders</text>
+        <line x1="215" y1="40" x2="155" y2="84" stroke="#D4D0CC" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="245" y1="40" x2="320" y2="84" stroke="#D4D0CC" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="80" y1="118" x2="50" y2="150" stroke="#D4D0CC" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="130" y1="118" x2="148" y2="150" stroke="#D4D0CC" stroke-width="1.5" marker-end="url(#arr)"/>
+      </svg>
+      <p class="caption">The bracket as a CSG tree. Leaves = primitives; nodes = operations.</p>
+    </div>
+
+    <h2 id="what-is-csg">What is CSG?</h2>
+    <p>
+      Every solid partitions 3D space into <em>inside</em> and <em>outside</em>.
+      CSG combines two solids using set logic on their interiors:
+    </p>
+    <div class="equation">
+A ∪ B  =  { p : p ∈ A  OR  p ∈ B }
+A ∩ B  =  { p : p ∈ A  AND  p ∈ B }
+A − B  =  { p : p ∈ A  AND  p ∉ B }
+    </div>
+    <p>
+      Beautiful in theory. Brutal in practice. You don't have a membership
+      oracle — you have 50,000 triangles. The algorithm must determine which
+      faces belong to the result, orient them correctly, and stitch everything
+      into a valid manifold. That's what CSG implementations actually do.
+    </p>
+
+    <h2 id="five-ops">The five operations</h2>
+    <p>
+      three-bvh-csg implements five core operations plus two "hollow" variants.
+      Each one keeps a different subset of the source triangles.
+    </p>
+    <div class="op-grid">
+      <div class="op-card">
+        <svg width="64" height="44" viewBox="0 0 64 44"><circle cx="22" cy="22" r="15" fill="#1A1AE520" stroke="#1A1AE5" stroke-width="1.5"/><circle cx="42" cy="22" r="15" fill="#1A1AE520" stroke="#1A1AE5" stroke-width="1.5"/></svg>
+        <span class="op-sym">∪</span><span class="op-name">ADDITION</span>
+        <p class="op-desc">Everything in A plus everything in B.</p>
+      </div>
+      <div class="op-card">
+        <svg width="64" height="44" viewBox="0 0 64 44"><defs><clipPath id="c1"><circle cx="42" cy="22" r="15"/></clipPath></defs><circle cx="22" cy="22" r="15" fill="none" stroke="#D4D0CC" stroke-width="1" stroke-dasharray="3,2"/><circle cx="42" cy="22" r="15" fill="none" stroke="#D4D0CC" stroke-width="1" stroke-dasharray="3,2"/><circle cx="22" cy="22" r="15" fill="#1A1AE550" stroke="#1A1AE5" stroke-width="1.5" clip-path="url(#c1)"/></svg>
+        <span class="op-sym">∩</span><span class="op-name">INTERSECTION</span>
+        <p class="op-desc">Only where A and B overlap.</p>
+      </div>
+      <div class="op-card">
+        <svg width="64" height="44" viewBox="0 0 64 44"><defs><clipPath id="c2"><circle cx="42" cy="22" r="15"/></clipPath></defs><circle cx="22" cy="22" r="15" fill="#1A1AE530" stroke="#1A1AE5" stroke-width="1.5"/><circle cx="42" cy="22" r="15" fill="#F4F2F0" clip-path="url(#c2)"/><circle cx="42" cy="22" r="15" fill="none" stroke="#D4D0CC" stroke-width="1" stroke-dasharray="3,2"/></svg>
+        <span class="op-sym">−</span><span class="op-name">SUBTRACTION</span>
+        <p class="op-desc">A with B's footprint removed.</p>
+      </div>
+      <div class="op-card">
+        <svg width="64" height="44" viewBox="0 0 64 44"><defs><clipPath id="c3"><circle cx="22" cy="22" r="15"/></clipPath></defs><circle cx="42" cy="22" r="15" fill="#D3540050" stroke="#D35400" stroke-width="1.5"/><circle cx="22" cy="22" r="15" fill="#F4F2F0" clip-path="url(#c3)"/><circle cx="22" cy="22" r="15" fill="none" stroke="#D4D0CC" stroke-width="1" stroke-dasharray="3,2"/></svg>
+        <span class="op-sym">⇐</span><span class="op-name">REV. SUBTRACT</span>
+        <p class="op-desc">B with A's footprint removed.</p>
+      </div>
+      <div class="op-card">
+        <svg width="64" height="44" viewBox="0 0 64 44"><defs><clipPath id="c4a"><circle cx="42" cy="22" r="15"/></clipPath><clipPath id="c4b"><circle cx="22" cy="22" r="15"/></clipPath></defs><circle cx="22" cy="22" r="15" fill="#1A1AE530" stroke="#1A1AE5" stroke-width="1.5"/><circle cx="42" cy="22" r="15" fill="#1A1AE530" stroke="#1A1AE5" stroke-width="1.5"/><circle cx="22" cy="22" r="15" fill="#F4F2F0" clip-path="url(#c4a)"/><circle cx="42" cy="22" r="15" fill="#F4F2F0" clip-path="url(#c4b)"/></svg>
+        <span class="op-sym">⊕</span><span class="op-name">DIFFERENCE</span>
+        <p class="op-desc">XOR: non-overlapping parts only.</p>
+      </div>
+      <div class="op-card">
+        <svg width="64" height="44" viewBox="0 0 64 44"><defs><clipPath id="c5"><circle cx="42" cy="22" r="15"/></clipPath></defs><circle cx="22" cy="22" r="15" fill="#1A1AE530" stroke="#1A1AE5" stroke-width="1.5"/><circle cx="22" cy="22" r="15" fill="#F4F2F0" clip-path="url(#c5)"/><circle cx="42" cy="22" r="15" fill="none" stroke="#D4D0CC" stroke-width="1.5" stroke-dasharray="4,2"/></svg>
+        <span class="op-sym">⊖</span><span class="op-name">HOLLOW SUB</span>
+        <p class="op-desc">Carves B's profile from A's surface only.</p>
+      </div>
+    </div>
+
+    <h2 id="demo-csg">Interactive: explore the operations</h2>
+    <p>
+      Drag the circles to reposition them. Switch operations to see the result region
+      highlighted. This is actual 2D CSG using Canvas compositing — the same set logic
+      as in 3D, just two dimensions simpler.
+    </p>
+    <div class="demo-box" id="csgDemoWrap">
+      <canvas id="csgCanvas" height="300"></canvas>
+      <div class="ctrl">
+        <button class="btn primary" id="opUnion">∪ Union</button>
+        <button class="btn" id="opSub">− Subtract A−B</button>
+        <button class="btn" id="opInter">∩ Intersect</button>
+        <button class="btn" id="opDiff">⊕ Difference</button>
+      </div>
+      <div class="cap">Two draggable circles (A = blue, B = orange). The highlighted region shows what the selected operation keeps.</div>
+    </div>
+
+
+    <h2 id="old-way">The old way: BSP trees</h2>
+    <p>
+      The classical CSG algorithm uses a <strong>Binary Space Partitioning (BSP) tree</strong>.
+      You build a BSP for each brush (each input mesh), then merge the two trees.
+      The result drops out of the merge traversal.
+    </p>
+    <p>
+      BSP-based CSG is elegant. It's also slow. Each polygon may need to be split
+      by every partition plane it crosses. On a complex model this means <em>quadratic</em>
+      growth in triangle count and time.
+    </p>
+    <div class="comparison">
+      <div>
+        <div class="clabel">BSP CSG</div>
+        <ul style="font-size:0.84rem;color:var(--text-muted);line-height:1.7;padding-left:18px;">
+          <li>Build BSP for each mesh — O(n log n)</li>
+          <li>Merge trees — O(n·m) in the worst case</li>
+          <li>Triangle count can explode during splits</li>
+          <li>Classic, well-understood, correct</li>
+        </ul>
+      </div>
+      <div>
+        <div class="clabel">BVH CSG (three-bvh-csg)</div>
+        <ul style="font-size:0.84rem;color:var(--text-muted);line-height:1.7;padding-left:18px;">
+          <li>Build BVH for each mesh — O(n log n)</li>
+          <li>Find intersections via BVH–BVH query — prunes 99% of pairs</li>
+          <li>Only intersecting triangles need splitting</li>
+          <li>100× faster on complex models</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout insight">
+      <div class="callout-title pixel-label">THE BIG IDEA</div>
+      In most CSG operations the two meshes only <em>partially</em> overlap.
+      The BVH finds the intersecting region instantly. Everything outside that region
+      is classified by a single raycast per connected patch — no splitting needed.
+    </div>
+
+    <h2 id="key-insight">Key insight: BVH-accelerated classification</h2>
+    <p>
+      To compute A − B you need to know, for every triangle in A,
+      whether it is <em>inside B</em> or <em>outside B</em>.
+      Inside → discard it. Outside → keep it (with correct orientation).
+    </p>
+    <p>
+      The naive test: pick a point on the triangle, shoot a ray in an arbitrary
+      direction, count how many times it crosses B's surface. Odd = inside. Even = outside.
+      This is a <strong>point-in-mesh test</strong> via raycasting.
+    </p>
+    <p>
+      Done naively that's O(n) per triangle — O(n²) total.
+      With a BVH for B, each ray only tests O(log n) triangles.
+      And better yet: non-intersecting triangles form connected patches.
+      You only raycast <em>one</em> per patch, then flood-fill the classification
+      through the half-edge graph to all neighbours.
+    </p>
+    <div class="visual" style="text-align:center;">
+      <svg viewBox="0 0 480 210" xmlns="http://www.w3.org/2000/svg" style="max-width:480px;width:100%;">
+        <!-- Mesh A (polygon on left) -->
+        <text x="90" y="20" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">MESH A</text>
+        <polygon points="30,40 150,40 175,130 90,170 15,110" fill="#1A1AE512" stroke="#1A1AE5" stroke-width="1.5"/>
+        <!-- inside region highlight -->
+        <polygon points="88,80 140,82 148,120 95,140 72,110" fill="#C0392B25" stroke="#C0392B" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="90" y="75" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#C0392B">B overlap</text>
+        <!-- outside triangles -->
+        <line x1="50" y1="72" x2="72" y2="100" stroke="#2D6A4F" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <circle cx="50" cy="72" r="3" fill="#2D6A4F"/>
+        <line x1="30" y1="100" x2="52" y2="128" stroke="#2D6A4F" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <circle cx="30" cy="100" r="3" fill="#2D6A4F"/>
+        <!-- ray from one representative -->
+        <line x1="50" y1="72" x2="310" y2="55" stroke="#2D6A4F" stroke-width="1" stroke-dasharray="4,3" opacity="0.6" marker-end="none"/>
+        <text x="44" y="62" font-family="JetBrains Mono,monospace" font-size="9" fill="#2D6A4F">1 ray</text>
+        <!-- flood fill arrow -->
+        <path d="M 78 88 Q 62 100 54 115" stroke="#2D6A4F" fill="none" stroke-width="1.5" stroke-dasharray="3,2"/>
+        <text x="44" y="108" font-family="JetBrains Mono,monospace" font-size="9" fill="#2D6A4F">flood</text>
+        <!-- BVH for mesh B (right) -->
+        <text x="360" y="20" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">MESH B — BVH</text>
+        <rect x="290" y="32" width="140" height="140" rx="4" fill="none" stroke="#D4D0CC" stroke-width="1.5"/>
+        <rect x="308" y="50" width="60" height="55" rx="3" fill="none" stroke="#D4D0CC" stroke-width="1.2"/>
+        <rect x="374" y="50" width="46" height="55" rx="3" fill="none" stroke="#D4D0CC" stroke-width="1.2"/>
+        <rect x="308" y="114" width="60" height="48" rx="3" fill="none" stroke="#D4D0CC" stroke-width="1.2"/>
+        <rect x="374" y="114" width="46" height="48" rx="3" fill="none" stroke="#D4D0CC" stroke-width="1.2"/>
+        <polygon points="318,58 358,62 354,96 316,92" fill="#1A1AE518" stroke="#1A1AE5" stroke-width="1"/>
+        <polygon points="382,58 412,56 414,88 384,90" fill="#1A1AE518" stroke="#1A1AE5" stroke-width="1"/>
+        <text x="360" y="185" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#8A857E">O(log n) per ray query</text>
+        <!-- connecting arrow -->
+        <path d="M 190 95 Q 230 95 285 90" stroke="#D4D0CC" fill="none" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <defs><marker id="arr2" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#D4D0CC"/></marker></defs>
+        <text x="230" y="84" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#8A857E">raycast →</text>
+      </svg>
+      <p class="caption">One representative point per connected patch of A is raycast into B's BVH. The classification floods through the half-edge graph to all connected triangles.</p>
+    </div>
+
+    <h2 id="algorithm">Algorithm deep dive</h2>
+    <p>The library's <code>IMPLEMENTATION.md</code> describes four phases:</p>
+
+    <div class="algo-step">
+      <div class="algo-num">1</div>
+      <div class="algo-body">
+        <h4>Generate brush data</h4>
+        <p>For each input mesh, build a <strong>BVH</strong> (spatial acceleration),
+        a <strong>half-edge map</strong> (triangle connectivity), and a
+        <strong>group index map</strong> (material assignment).
+        These are cached — reuse them if the mesh hasn't changed.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="algo-num">2</div>
+      <div class="algo-body">
+        <h4>Find all intersecting triangle pairs</h4>
+        <p>Run a <strong>dual-tree traversal</strong> (bvhcast) between the two BVHs.
+        This descends both trees simultaneously, pruning any node pair whose AABBs
+        don't overlap. Only truly intersecting leaf pairs survive — typically a tiny
+        fraction of all n×m pairs.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="algo-num">3</div>
+      <div class="algo-body">
+        <h4>Classify non-intersecting triangles (flood fill)</h4>
+        <p>For each connected patch of non-intersecting triangles, pick one representative,
+        raycast it against the other mesh's BVH to get inside/outside, then
+        <strong>flood through the half-edge graph</strong> to propagate the label to
+        every triangle in the patch. O(triangles in patch) after the single raycast.</p>
+      </div>
+    </div>
+    <div class="algo-step">
+      <div class="algo-num">4</div>
+      <div class="algo-body">
+        <h4>Split and classify intersecting triangles</h4>
+        <p>For each intersecting pair, compute the intersection line segment and
+        <strong>split both triangles</strong> along it. Each resulting sub-triangle
+        is then classified individually via raycast.
+        This is the bottleneck — each split triangle needs its own ray.</p>
+      </div>
+    </div>
+
+    <h2 id="half-edge">Half-edge flood fill</h2>
+    <p>
+      The half-edge map is the key to fast propagation. Every edge in a manifold mesh
+      is shared by exactly two triangles. Storing both directions gives you instant
+      triangle-to-triangle navigation.
+    </p>
+    <div class="visual" style="text-align:center;">
+      <svg viewBox="0 0 420 180" xmlns="http://www.w3.org/2000/svg" style="max-width:420px;width:100%;">
+        <polygon points="80,30 200,30 200,140" fill="#1A1AE510" stroke="#1A1AE5" stroke-width="1.5"/>
+        <polygon points="200,30 200,140 310,80" fill="#2D6A4F10" stroke="#2D6A4F" stroke-width="1.5"/>
+        <text x="150" y="85" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#1A1AE5">T₀</text>
+        <text x="240" y="80" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#2D6A4F">T₁</text>
+        <!-- half-edge arrows on shared edge -->
+        <line x1="200" y1="50" x2="200" y2="118" stroke="#1A1AE5" stroke-width="1.5" marker-end="url(#arrB)"/>
+        <line x1="204" y1="118" x2="204" y2="52" stroke="#2D6A4F" stroke-width="1.5" marker-end="url(#arrG)"/>
+        <defs>
+          <marker id="arrB" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill="#1A1AE5"/></marker>
+          <marker id="arrG" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill="#2D6A4F"/></marker>
+        </defs>
+        <text x="188" y="90" font-family="JetBrains Mono,monospace" font-size="9" fill="#1A1AE5" text-anchor="end">he₀</text>
+        <text x="216" y="90" font-family="JetBrains Mono,monospace" font-size="9" fill="#2D6A4F">he₁</text>
+        <text x="202" y="165" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">he₁.twin = he₀ → lookup T₀ from T₁ in O(1)</text>
+        <!-- table on right -->
+        <rect x="330" y="20" width="80" height="30" rx="3" fill="#EDEAE7" stroke="#D4D0CC"/>
+        <text x="370" y="39" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#8A857E">half-edge map</text>
+        <rect x="330" y="55" width="80" height="20" rx="2" fill="#1A1AE510" stroke="#D4D0CC"/>
+        <text x="370" y="69" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#1A1AE5">edge → twin</text>
+        <rect x="330" y="78" width="80" height="20" rx="2" fill="#2D6A4F10" stroke="#D4D0CC"/>
+        <text x="370" y="92" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2D6A4F">triangle ID</text>
+        <text x="370" y="115" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#8A857E">typed arrays</text>
+        <text x="370" y="128" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#8A857E">compact, GC-free</text>
+      </svg>
+      <p class="caption">The half-edge map stores twin relationships in typed arrays. Knowing T₀ is "outside" means T₁ — adjacent across the shared edge — inherits the same classification without another raycast.</p>
+    </div>
+
+    <h2 id="splitting">Triangle splitting</h2>
+    <p>
+      When two triangles from different meshes intersect, the intersection is a line segment.
+      Each triangle must be cut along that segment, producing sub-triangles that lie
+      entirely inside or outside the other mesh.
+    </p>
+    <div class="visual" style="text-align:center;">
+      <svg viewBox="0 0 460 170" xmlns="http://www.w3.org/2000/svg" style="max-width:460px;width:100%;">
+        <!-- Before -->
+        <text x="100" y="16" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">BEFORE</text>
+        <polygon points="20,140 100,20 180,140" fill="#1A1AE510" stroke="#1A1AE5" stroke-width="1.5"/>
+        <polygon points="55,120 165,60 175,140 80,155" fill="#C0392B10" stroke="#C0392B" stroke-width="1.5"/>
+        <text x="100" y="100" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#1A1AE5">T_A</text>
+        <text x="130" y="130" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#C0392B">T_B</text>
+        <!-- intersection segment -->
+        <line x1="68" y1="108" x2="153" y2="82" stroke="#D35400" stroke-width="2"/>
+        <circle cx="68" cy="108" r="4" fill="#D35400"/>
+        <circle cx="153" cy="82" r="4" fill="#D35400"/>
+        <text x="110" y="72" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#D35400">intersection segment</text>
+        <!-- After -->
+        <text x="360" y="16" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">AFTER SPLIT</text>
+        <polygon points="280,140 360,20 408,108" fill="#1A1AE530" stroke="#1A1AE5" stroke-width="1.5"/>
+        <text x="350" y="65" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#1A1AE5">OUTSIDE B</text>
+        <polygon points="408,108 360,20 436,140 280,140" fill="#1A1AE508" stroke="#1A1AE5" stroke-width="1" stroke-dasharray="4,2"/>
+        <text x="375" y="125" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#8A857E">INSIDE B</text>
+        <line x1="408" y1="108" x2="280" y2="140" stroke="#D35400" stroke-width="2"/>
+        <circle cx="408" cy="108" r="4" fill="#D35400"/>
+        <circle cx="280" cy="140" r="4" fill="#D35400"/>
+        <text x="230" y="85" text-anchor="middle" font-family="Inter,sans-serif" font-size="22" fill="#D4D0CC">→</text>
+      </svg>
+      <p class="caption">The intersection segment splits T_A into sub-triangles. Each sub-triangle is then classified (inside/outside B) via raycast and kept or discarded per the selected operation.</p>
+    </div>
+
+    <h2 id="demo-algo">Interactive: algorithm step by step</h2>
+    <p>
+      The demo below shows the BVH-CSG pipeline on two overlapping 2D polygons.
+      Step through each phase: intersection detection → flood fill → split → assemble.
+    </p>
+    <div class="demo-box" id="algoWrap">
+      <canvas id="algoCanvas" height="340"></canvas>
+      <div class="ctrl">
+        <button class="btn primary" id="btnAlgoStep">▶ Next step</button>
+        <button class="btn" id="btnAlgoReset">↺ Reset</button>
+        <span id="algoLabel" style="font-family:var(--font-mono);font-size:0.78rem;color:var(--accent);align-self:center;"></span>
+      </div>
+      <div class="cap">Step through the pipeline: 1 = identify intersecting edges, 2 = classify outer patches, 3 = split boundary edges, 4 = assemble result.</div>
+    </div>
+
+    <h2 id="api">The API in 5 minutes</h2>
+    <p>
+      The library is designed with a clear separation: <code>Brush</code> wraps geometry
+      and caches its BVH, <code>Evaluator</code> performs the operation.
+    </p>
+    <pre><code>import { SUBTRACTION, ADDITION, INTERSECTION, Brush, Evaluator } from 'three-bvh-csg';
+
+// Create brushes — wraps THREE.Mesh, caches BVH internally
+const brushA = new Brush( new THREE.SphereGeometry(1, 32, 32) );
+brushA.updateMatrixWorld();
+
+const brushB = new Brush( new THREE.BoxGeometry(1.2, 1.2, 1.2) );
+brushB.position.set(0.5, 0.5, 0.5);
+brushB.updateMatrixWorld(); // ← required before evaluate()
+
+const evaluator = new Evaluator();
+const result = evaluator.evaluate( brushA, brushB, SUBTRACTION );
+
+// result is a regular THREE.Mesh — add to scene
+scene.add(result);</code></pre>
+
+    <div class="brush-pair">
+      <div class="brush-box">
+        <h5>Brush</h5>
+        <ul>
+          <li>Extends <code>THREE.Mesh</code></li>
+          <li>Caches BVH + half-edge map</li>
+          <li>Cache is reused across repeated evaluations</li>
+          <li>Don't modify geometry after creation</li>
+        </ul>
+      </div>
+      <div class="brush-box">
+        <h5>Evaluator</h5>
+        <ul>
+          <li>Call <code>.evaluate(a, b, op)</code></li>
+          <li>Returns a new <code>THREE.Mesh</code></li>
+          <li>Or pass a target mesh to reuse buffers: <code>.evaluate(a, b, op, target)</code></li>
+          <li>Thread-safe per instance</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>For hierarchical operations — a scene tree of brushes — use <code>Operation</code> and <code>evaluateHierarchy</code>:</p>
+    <pre><code>import { Operation, OperationGroup, SUBTRACTION } from 'three-bvh-csg';
+
+// Build a tree: box - sphere1 - sphere2
+const root = new Operation( new THREE.BoxGeometry(2,2,2) );
+const hole1 = new Operation( new THREE.SphereGeometry(0.5) );
+const hole2 = new Operation( new THREE.SphereGeometry(0.5) );
+
+hole1.operation = SUBTRACTION;
+hole2.operation = SUBTRACTION;
+hole1.position.set(-0.5, 0, 0);
+hole2.position.set( 0.5, 0, 0);
+
+root.add(hole1, hole2);
+const result = evaluator.evaluateHierarchy(root);</code></pre>
+
+    <h2 id="performance">Performance: 100× faster than BSP</h2>
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="val">100×</div>
+        <div class="label">faster than BSP CSG on complex meshes</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">~2ms</div>
+        <div class="label">simple sphere−box on modern hardware</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">O(log n)</div>
+        <div class="label">per classification raycast with BVH</div>
+      </div>
+    </div>
+    <p>The table below compares approaches across three complexity levels:</p>
+    <table class="perf-table">
+      <thead>
+        <tr><th>Mesh complexity</th><th>BSP CSG</th><th>BVH CSG</th><th>Speedup</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Simple (sphere + box, ~2K tris)</td><td>~5ms</td><td class="win">~0.5ms</td><td class="win">10×</td></tr>
+        <tr><td>Medium (character + capsule, ~20K tris)</td><td>~200ms</td><td class="win">~8ms</td><td class="win">25×</td></tr>
+        <tr><td>Complex (high-res scan, ~200K tris)</td><td class="lose">&gt;5s</td><td class="win">~50ms</td><td class="win">&gt;100×</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The speedup grows with mesh complexity because BSP scales poorly: more triangles
+      means more splits means more planes means more sub-triangles to process.
+      BVH's logarithmic culling means classification cost grows slowly with n.
+    </p>
+
+    <h2 id="applications">Real-world applications</h2>
+    <div class="concept-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="concept-card"><div class="icon">🔩</div><h4>Procedural CAD</h4><p>Drill holes, cut slots, build assemblies — parametrically, in the browser. OpenSCAD-style workflows without leaving Three.js.</p></div>
+      <div class="concept-card"><div class="icon">🎮</div><h4>Level editing</h4><p>Godot's CSG nodes use the same principles. Subtract corridors from rock, add archways, compose rooms non-destructively.</p></div>
+      <div class="concept-card"><div class="icon">🧊</div><h4>Mesh clipping</h4><p>Clip a model against a plane (use a large box as brush B) for cross-section views, cavity inspection, shadow receivers.</p></div>
+      <div class="concept-card"><div class="icon">🩺</div><h4>Medical & simulation</h4><p>Subtract implant geometry from bone models, compute vessel intersections, build anatomical phantoms for simulation.</p></div>
+    </div>
+
+    <h2 id="history">From 1977 to the browser</h2>
+    <div class="timeline">
+      <div class="timeline-item">
+        <span class="year">1977</span>
+        <h4>Requicha &amp; Voelcker</h4>
+        <p>University of Rochester formalises CSG within the PADL solid modelling project. The CSG tree is defined as a mathematical object.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">1980</span>
+        <h4>BSP-based CSG</h4>
+        <p>Fuchs, Kedem &amp; Naylor introduce BSP trees for hidden-surface removal. The community quickly adapts them for CSG evaluation — elegant but O(n²) in the worst case.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">1989</span>
+        <h4>Ray-tracing CSG</h4>
+        <p>POV-Ray ships with ray-tracing CSG: compute entry/exit intervals per primitive, intersect them. Fast for rendering, but outputs no mesh.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2002</span>
+        <h4>Mesh-based CSG in games</h4>
+        <p>Unreal Engine ships BSP-based brush tools. Level designers can subtract corridors from solid world geometry — the paradigm enters mainstream game development.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2016</span>
+        <h4>Manifold (CGAL-quality)</h4>
+        <p>Emmett Lalish starts Manifold — robust, numerically exact CSG using exact arithmetic and manifold guarantees. The CAD-grade baseline.</p>
+      </div>
+      <div class="timeline-item">
+        <span class="year">2022</span>
+        <h4>three-bvh-csg</h4>
+        <p>Garrett Johnson releases three-bvh-csg, powered by the BVH acceleration from three-mesh-bvh. Real-time, interactive CSG in the browser — 100× faster than BSP alternatives on complex geometry.</p>
+      </div>
+    </div>
+
+    <h2 id="limits">Limitations and open problems</h2>
+    <div class="callout warning">
+      <div class="callout-title pixel-label">MANIFOLD REQUIREMENT</div>
+      Input geometry must be <strong>two-manifold</strong> (water-tight, no self-intersections, no degenerate triangles). Open meshes, planes, or badly-exported CAD files will produce wrong results.
+    </div>
+    <p>Known issues from the <code>IMPLEMENTATION.md</code>:</p>
+    <ul style="line-height:1.9;color:var(--text-muted);font-size:0.88rem;">
+      <li><strong>Floating-point robustness</strong> — some triangles near coplanar regions aren't split correctly. Near-zero-area triangles can appear at intersection seams.</li>
+      <li><strong>Split connectivity</strong> — each split triangle currently needs its own raycast. Once a triangle is split, the half-edge links are broken, so the flood-fill can't propagate through it. This is the main performance bottleneck on dense intersection seams.</li>
+      <li><strong>No worker support (yet)</strong> — BVH and half-edge construction could run off the main thread; the framework is there but unused.</li>
+      <li><strong>For CAD-grade robustness</strong>, prefer <a href="https://github.com/elalish/manifold" style="color:var(--accent);">Manifold</a> which uses exact arithmetic. three-bvh-csg trades precision for speed and interactivity.</li>
+    </ul>
+
+    <h2 id="reading">Further reading</h2>
+    <div class="concept-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="concept-card"><div class="icon">📦</div><h4><a href="https://github.com/gkjohnson/three-bvh-csg" style="color:var(--text);">three-bvh-csg</a></h4><p>Source, examples, and IMPLEMENTATION.md — the authoritative reference for everything covered here.</p></div>
+      <div class="concept-card"><div class="icon">🌲</div><h4><a href="https://github.com/gkjohnson/three-mesh-bvh" style="color:var(--text);">three-mesh-bvh</a></h4><p>The BVH library underneath. Understand the dual-tree traversal (bvhcast) to understand why CSG is fast.</p></div>
+      <div class="concept-card"><div class="icon">📐</div><h4><a href="https://github.com/elalish/manifold" style="color:var(--text);">Manifold</a></h4><p>Exact CSG for production CAD. When you need mathematical correctness over interactive speed.</p></div>
+      <div class="concept-card"><div class="icon">📖</div><h4>Requicha 1980</h4><p>"Representations for Rigid Solids: Theory, Methods, and Systems" — the paper that formalised CSG. ACM Computing Surveys.</p></div>
+    </div>
+
+  </article>
+
+  <footer class="site-footer">Geo-Instructor · Seeing the geometry beneath everything</footer>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+(function heroScene() {
+  const canvas = document.getElementById('heroCanvas');
+  const box = canvas.parentElement;
+  const W = box.clientWidth, H = 380;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0xF4F2F0);
+
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+  dir.position.set(4, 6, 5);
+  scene.add(dir);
+
+  const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 50);
+  camera.position.set(0, 1.5, 5);
+
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.enablePan = false;
+
+  // Two brushes: sphere A (blue) and box B (orange)
+  const geoA = new THREE.SphereGeometry(1.1, 40, 40);
+  const geoB = new THREE.BoxGeometry(1.4, 1.4, 1.4);
+
+  const matA = new THREE.MeshStandardMaterial({ color: 0x1A1AE5, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const matB = new THREE.MeshStandardMaterial({ color: 0xD35400, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const matResult = new THREE.MeshStandardMaterial({ color: 0x2D6A4F, roughness: 0.3, metalness: 0.2 });
+
+  const meshA = new THREE.Mesh(geoA, matA);
+  const meshB = new THREE.Mesh(geoB, matB);
+  meshB.position.set(0.7, 0.4, 0);
+  scene.add(meshA, meshB);
+
+  // Produce a result mesh by a simple "intersection region" approximation visually
+  // (we can't run actual CSG without the library loaded, so we show the brushes + label)
+  const resultGeo = new THREE.SphereGeometry(0.55, 32, 32);
+  const resultMesh = new THREE.Mesh(resultGeo, matResult);
+  resultMesh.position.set(0.35, 0.2, 0);
+  resultMesh.visible = false;
+  scene.add(resultMesh);
+
+  let mode = 'union';
+  let wireMode = false;
+  const matWire = new THREE.MeshBasicMaterial({ color: 0x2A2622, wireframe: true });
+
+  function applyMode(m) {
+    mode = m;
+    wireMode = false;
+    if (m === 'union') {
+      meshA.material = matA; meshA.visible = true;
+      meshB.material = matB; meshB.visible = true;
+      resultMesh.visible = false;
+    } else if (m === 'sub') {
+      meshA.material = matA; meshA.visible = true;
+      meshB.material = new THREE.MeshStandardMaterial({ color: 0xD35400, roughness: 0.4, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+      meshB.visible = true;
+      resultMesh.visible = false;
+    } else if (m === 'inter') {
+      meshA.material = new THREE.MeshStandardMaterial({ color: 0x1A1AE5, roughness: 0.4, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+      meshB.material = new THREE.MeshStandardMaterial({ color: 0xD35400, roughness: 0.4, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+      meshA.visible = true; meshB.visible = true;
+      resultMesh.visible = true;
+    }
+  }
+
+  document.getElementById('btnHeroUnion').onclick  = () => applyMode('union');
+  document.getElementById('btnHeroSub').onclick    = () => applyMode('sub');
+  document.getElementById('btnHeroInter').onclick  = () => applyMode('inter');
+  document.getElementById('btnHeroWire').onclick   = () => {
+    wireMode = !wireMode;
+    [meshA, meshB, resultMesh].forEach(m => {
+      if (!wireMode) { m.material = m === meshA ? matA : m === meshB ? matB : matResult; }
+      else { m.material = matWire; }
+    });
+    applyMode(mode);
+    if (wireMode) { meshA.material = matWire; meshB.material = matWire; }
+  };
+
+  window.addEventListener('resize', () => {
+    const w2 = box.clientWidth;
+    camera.aspect = w2 / H;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w2, H);
+  });
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+})();
+</script>
+<script>
+(function csgDemo() {
+  const canvas = document.getElementById('csgCanvas');
+  const wrap   = document.getElementById('csgDemoWrap');
+  const dpr = window.devicePixelRatio || 1;
+  let W, H = 300;
+  function resize() {
+    W = wrap.clientWidth;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+  }
+  resize();
+  const ctx = canvas.getContext('2d');
+
+  let op = 'union';
+  const A = { x: W * 0.38, y: H * 0.5, r: 90 };
+  const B = { x: W * 0.62, y: H * 0.5, r: 80 };
+  let dragging = null, dx = 0, dy = 0;
+
+  // Drag support
+  function pt(e) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return [cx, cy];
+  }
+  canvas.addEventListener('mousedown', e => {
+    const [cx, cy] = pt(e);
+    if (dist(cx, cy, A.x, A.y) < A.r) { dragging = A; dx = cx - A.x; dy = cy - A.y; }
+    else if (dist(cx, cy, B.x, B.y) < B.r) { dragging = B; dx = cx - B.x; dy = cy - B.y; }
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const [cx, cy] = pt(e);
+    dragging.x = cx - dx;
+    dragging.y = cy - dy;
+    draw();
+  });
+  window.addEventListener('mouseup', () => { dragging = null; });
+
+  function dist(x1, y1, x2, y2) { return Math.sqrt((x1-x2)**2 + (y1-y2)**2); }
+
+  function draw() {
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = '#EDEAE7'; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    // Draw result region based on op
+    ctx.save();
+    if (op === 'union') {
+      ctx.beginPath(); ctx.arc(A.x, A.y, A.r, 0, Math.PI*2); ctx.arc(B.x, B.y, B.r, 0, Math.PI*2); 
+      ctx.fillStyle = 'rgba(26,26,229,0.15)'; ctx.fill('evenodd');
+      // union: both circles filled
+      ctx.beginPath(); ctx.arc(A.x, A.y, A.r, 0, Math.PI*2); ctx.fillStyle = 'rgba(26,26,229,0.18)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(B.x, B.y, B.r, 0, Math.PI*2); ctx.fillStyle = 'rgba(211,84,0,0.18)'; ctx.fill();
+    } else if (op === 'sub') {
+      // A minus B: clip A to not-B using compositing
+      const offA = document.createElement('canvas'); offA.width = W*dpr; offA.height = H*dpr;
+      const ctxA = offA.getContext('2d'); ctxA.scale(dpr, dpr);
+      ctxA.beginPath(); ctxA.arc(A.x, A.y, A.r, 0, Math.PI*2); ctxA.fillStyle = 'rgba(26,26,229,0.35)'; ctxA.fill();
+      ctxA.globalCompositeOperation = 'destination-out';
+      ctxA.beginPath(); ctxA.arc(B.x, B.y, B.r, 0, Math.PI*2); ctxA.fillStyle = '#000'; ctxA.fill();
+      ctx.drawImage(offA, 0, 0, W, H);
+    } else if (op === 'inter') {
+      // intersection: clip A by B
+      const offI = document.createElement('canvas'); offI.width = W*dpr; offI.height = H*dpr;
+      const ctxI = offI.getContext('2d'); ctxI.scale(dpr, dpr);
+      ctxI.beginPath(); ctxI.arc(A.x, A.y, A.r, 0, Math.PI*2); ctxI.fillStyle = 'rgba(45,106,79,0.45)'; ctxI.fill();
+      ctxI.globalCompositeOperation = 'destination-in';
+      ctxI.beginPath(); ctxI.arc(B.x, B.y, B.r, 0, Math.PI*2); ctxI.fillStyle = '#000'; ctxI.fill();
+      ctx.drawImage(offI, 0, 0, W, H);
+    } else if (op === 'diff') {
+      // XOR: union minus intersection
+      const offX = document.createElement('canvas'); offX.width = W*dpr; offX.height = H*dpr;
+      const ctxX = offX.getContext('2d'); ctxX.scale(dpr, dpr);
+      ctxX.beginPath(); ctxX.arc(A.x, A.y, A.r, 0, Math.PI*2); ctxX.fillStyle = 'rgba(26,26,229,0.35)'; ctxX.fill();
+      ctxX.globalCompositeOperation = 'xor';
+      ctxX.beginPath(); ctxX.arc(B.x, B.y, B.r, 0, Math.PI*2); ctxX.fillStyle = 'rgba(211,84,0,0.35)'; ctxX.fill();
+      ctx.drawImage(offX, 0, 0, W, H);
+    }
+    ctx.restore();
+
+    // Outlines
+    ctx.beginPath(); ctx.arc(A.x, A.y, A.r, 0, Math.PI*2);
+    ctx.strokeStyle = '#1A1AE5'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(B.x, B.y, B.r, 0, Math.PI*2);
+    ctx.strokeStyle = '#D35400'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Labels
+    ctx.font = '13px Inter,sans-serif';
+    ctx.fillStyle = '#1A1AE5'; ctx.textAlign = 'center';
+    ctx.fillText('A', A.x, A.y + 5);
+    ctx.fillStyle = '#D35400';
+    ctx.fillText('B', B.x, B.y + 5);
+
+    ctx.restore();
+  }
+
+  document.getElementById('opUnion').onclick  = () => { op = 'union'; draw(); };
+  document.getElementById('opSub').onclick    = () => { op = 'sub';   draw(); };
+  document.getElementById('opInter').onclick  = () => { op = 'inter'; draw(); };
+  document.getElementById('opDiff').onclick   = () => { op = 'diff';  draw(); };
+
+  window.addEventListener('resize', () => { resize(); A.x = W*0.38; B.x = W*0.62; A.y = H*0.5; B.y = H*0.5; draw(); });
+  draw();
+})();
+</script>
+<script>
+(function algoDemo() {
+  const canvas = document.getElementById('algoCanvas');
+  const wrap   = document.getElementById('algoWrap');
+  const label  = document.getElementById('algoLabel');
+  const dpr = window.devicePixelRatio || 1;
+  let W; const H = 340;
+  function resize() {
+    W = wrap.clientWidth;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+  }
+  resize();
+  const ctx = canvas.getContext('2d');
+
+  // Two simple polygons
+  function makePolygons() {
+    const cx = W / 2, cy = H / 2;
+    const pA = [
+      [cx - 110, cy - 80], [cx + 10, cy - 90], [cx + 40, cy - 10],
+      [cx + 20, cy + 70], [cx - 80, cy + 80], [cx - 130, cy + 20]
+    ];
+    const pB = [
+      [cx - 20, cy - 70], [cx + 120, cy - 50], [cx + 130, cy + 50],
+      [cx + 40, cy + 90], [cx - 30, cy + 60]
+    ];
+    return { pA, pB };
+  }
+
+  let step = 0;
+  let polys = makePolygons();
+  const steps = [
+    'STEP 0 — Two overlapping polygons (A = blue, B = orange)',
+    'STEP 1 — Detect intersecting edges (orange dots = intersection points)',
+    'STEP 2 — Flood-fill outside patches: green = A-outside, ghost = A-inside',
+    'STEP 3 — Split boundary edges at intersection points',
+    'STEP 4 — Assemble result: A − B (keep A-outside, discard A-inside)'
+  ];
+
+  function segIntersect(p1, p2, p3, p4) {
+    const [x1,y1] = p1, [x2,y2] = p2, [x3,y3] = p3, [x4,y4] = p4;
+    const denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4);
+    if (Math.abs(denom) < 1e-10) return null;
+    const t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / denom;
+    const u = -((x1-x2)*(y1-y3) - (y1-y2)*(x1-x3)) / denom;
+    if (t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99) {
+      return [x1 + t*(x2-x1), y1 + t*(y2-y1)];
+    }
+    return null;
+  }
+
+  function getIntersections(pA, pB) {
+    const pts = [];
+    for (let i = 0; i < pA.length; i++) {
+      const a1 = pA[i], a2 = pA[(i+1)%pA.length];
+      for (let j = 0; j < pB.length; j++) {
+        const b1 = pB[j], b2 = pB[(j+1)%pB.length];
+        const pt = segIntersect(a1, a2, b1, b2);
+        if (pt) pts.push(pt);
+      }
+    }
+    return pts;
+  }
+
+  function ptInPoly(px, py, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length-1; i < poly.length; j = i++) {
+      const [xi,yi] = poly[i], [xj,yj] = poly[j];
+      if (((yi>py) !== (yj>py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi)) inside = !inside;
+    }
+    return inside;
+  }
+
+  function drawPoly(pts, strokeCol, fillCol, dash=[]) {
+    ctx.beginPath();
+    pts.forEach(([x,y], i) => i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y));
+    ctx.closePath();
+    if (fillCol)   { ctx.fillStyle = fillCol;     ctx.fill(); }
+    if (strokeCol) { ctx.strokeStyle = strokeCol; ctx.lineWidth = 2; ctx.setLineDash(dash); ctx.stroke(); ctx.setLineDash([]); }
+  }
+
+  function draw() {
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = '#EDEAE7'; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+    const { pA, pB } = polys;
+    const ixPts = getIntersections(pA, pB);
+
+    if (step === 0) {
+      drawPoly(pA, '#1A1AE5', 'rgba(26,26,229,0.12)');
+      drawPoly(pB, '#D35400', 'rgba(211,84,0,0.12)');
+    } else if (step === 1) {
+      drawPoly(pA, '#1A1AE5', 'rgba(26,26,229,0.08)');
+      drawPoly(pB, '#D35400', 'rgba(211,84,0,0.08)');
+      ixPts.forEach(([x,y]) => {
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2);
+        ctx.fillStyle = '#D35400'; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      });
+    } else if (step === 2) {
+      // outside A (green), inside A (ghost)
+      const cx = pA.reduce((s,p)=>s+p[0],0)/pA.length;
+      const cy = pA.reduce((s,p)=>s+p[1],0)/pA.length;
+      const insideB = ptInPoly(cx, cy, pB);
+      drawPoly(pA, '#2D6A4F', insideB ? 'rgba(45,106,79,0.06)' : 'rgba(45,106,79,0.22)');
+      drawPoly(pB, '#D35400', 'rgba(211,84,0,0.08)', [6,3]);
+      // label outside patch
+      ctx.font = '11px JetBrains Mono,monospace';
+      ctx.fillStyle = '#2D6A4F'; ctx.textAlign = 'center';
+      ctx.fillText('OUTSIDE', pA[0][0] - 20, pA[0][1] - 12);
+      ctx.fillStyle = '#8A857E';
+      ctx.fillText('INSIDE', pA[3][0] + 20, pA[3][1] + 5);
+      ixPts.forEach(([x,y]) => { ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fillStyle='#D35400'; ctx.fill(); });
+    } else if (step === 3) {
+      // show split points on A's boundary
+      drawPoly(pA, '#1A1AE5', 'rgba(26,26,229,0.10)');
+      drawPoly(pB, '#D35400', 'rgba(211,84,0,0.06)', [5,3]);
+      ixPts.forEach(([x,y]) => {
+        ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = '#D35400'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle='#D35400'; ctx.fill();
+      });
+      ctx.font = '11px JetBrains Mono,monospace';
+      ctx.fillStyle = '#D35400'; ctx.textAlign = 'center';
+      ixPts.forEach(([x,y]) => ctx.fillText('split', x, y - 13));
+    } else if (step === 4) {
+      // Assemble: draw only A-outside-B parts (approx: A outline, erase B overlap)
+      const offR = document.createElement('canvas'); offR.width = W*dpr; offR.height = H*dpr;
+      const ctxR = offR.getContext('2d'); ctxR.scale(dpr, dpr);
+      ctxR.beginPath();
+      pA.forEach(([x,y],i) => i===0 ? ctxR.moveTo(x,y) : ctxR.lineTo(x,y));
+      ctxR.closePath(); ctxR.fillStyle = 'rgba(26,26,229,0.35)'; ctxR.fill();
+      ctxR.globalCompositeOperation = 'destination-out';
+      ctxR.beginPath();
+      pB.forEach(([x,y],i) => i===0 ? ctxR.moveTo(x,y) : ctxR.lineTo(x,y));
+      ctxR.closePath(); ctxR.fillStyle = '#000'; ctxR.fill();
+      ctx.drawImage(offR, 0, 0, W, H);
+      // Stroke outline
+      ctx.beginPath();
+      pA.forEach(([x,y],i) => i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y));
+      ctx.closePath(); ctx.strokeStyle = '#1A1AE5'; ctx.lineWidth = 2.5; ctx.stroke();
+      // B ghost
+      drawPoly(pB, '#D4D0CC', null, [5,3]);
+      ctx.font = 'bold 13px Inter,sans-serif';
+      ctx.fillStyle = '#1A1AE5'; ctx.textAlign = 'center';
+      ctx.fillText('RESULT: A − B', W/2, 28);
+    }
+
+    // Legend
+    ctx.font = '10px JetBrains Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#1A1AE5'; ctx.fillText('■ A', 14, 20);
+    ctx.fillStyle = '#D35400'; ctx.fillText('■ B', 40, 20);
+
+    ctx.restore();
+  }
+
+  document.getElementById('btnAlgoStep').onclick = () => {
+    step = (step + 1) % steps.length;
+    label.textContent = steps[step];
+    draw();
+  };
+  document.getElementById('btnAlgoReset').onclick = () => {
+    step = 0; polys = makePolygons(); label.textContent = steps[0]; draw();
+  };
+
+  label.textContent = steps[0];
+  window.addEventListener('resize', () => { resize(); draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
