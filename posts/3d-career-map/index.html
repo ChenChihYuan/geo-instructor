@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Geometry Career Map -- Geo-Instructor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&display=swap">
+<style>
+/* -- RESET ------------------------------------------ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+/* -- TOKENS ----------------------------------------- */
+:root {
+  --bg:        #F4F2F0;
+  --card-bg:   #EDEAE7;
+  --text:      #2A2622;
+  --muted:     #8A857E;
+  --accent:    #1A1AE5;
+  --border:    #D4D0CC;
+  --red:       #C0392B;
+  --green:     #2D6A4F;
+  --orange:    #D35400;
+  --purple:    #6C3483;
+  --teal:      #0E7C7B;
+  --gold:      #B7950B;
+}
+
+/* -- BASE ------------------------------------------- */
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+/* -- NAV -------------------------------------------- */
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 2.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.65rem;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 0.06em;
+}
+.nav-links { display: flex; gap: 1.5rem; }
+.nav-links a {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.55rem;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 0.08em;
+}
+.nav-links a:hover { color: var(--accent); }
+
+/* -- HERO ------------------------------------------- */
+.hero {
+  padding: 4rem 2.5rem 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.hero-eyebrow {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.55rem;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  margin-bottom: 1rem;
+}
+.hero-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(2.4rem, 5vw, 3.6rem);
+  line-height: 1.1;
+  margin-bottom: 1rem;
+}
+.hero-title em { font-style: italic; color: var(--accent); }
+.hero-sub {
+  font-size: 1.05rem;
+  color: var(--muted);
+  max-width: 640px;
+  margin-bottom: 2rem;
+}
+.hero-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2.5rem; }
+.tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--muted);
+}
+.tag.active { border-color: var(--accent); color: var(--accent); background: rgba(26,26,229,0.06); }
+
+/* -- SECTION DIVIDER -------------------------------- */
+.divider {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.5rem;
+  color: var(--border);
+  letter-spacing: 0.15em;
+  padding: 2rem 2.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* -- MAIN LAYOUT ------------------------------------ */
+.main-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 2.5rem 4rem;
+}
+
+/* -- SECTION HEADERS -------------------------------- */
+.section-header {
+  margin-bottom: 2rem;
+}
+.section-header h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.8rem;
+  margin-bottom: 0.4rem;
+}
+.section-header p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* -- KNOWLEDGE GRAPH -------------------------------- */
+.graph-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 3rem;
+  position: relative;
+}
+#graph-canvas {
+  width: 100%;
+  height: 560px;
+  display: block;
+}
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* -- ROLE GRID -------------------------------------- */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+.role-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.role-card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(26,26,229,0.08); }
+.role-card.selected { border-color: var(--accent); background: rgba(26,26,229,0.04); }
+.role-card-accent {
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
+  margin-bottom: 1rem;
+}
+.role-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.2rem;
+  margin-bottom: 0.3rem;
+}
+.role-subtitle {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+.role-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 1rem; }
+.chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.role-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.salary { font-family: 'JetBrains Mono', monospace; }
+
+/* -- ROLE DETAIL PANEL ------------------------------ */
+.detail-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  display: none;
+}
+.detail-panel.visible { display: block; }
+.detail-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+.detail-panel-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.6rem;
+}
+.detail-panel-close {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.5rem;
+  color: var(--muted);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: none;
+  padding: 0.4rem 0.6rem;
+  letter-spacing: 0.08em;
+}
+.detail-panel-close:hover { color: var(--accent); border-color: var(--accent); }
+
+.detail-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+@media (max-width: 640px) { .detail-cols { grid-template-columns: 1fr; } }
+
+.detail-section h4 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.5rem;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  margin-bottom: 0.8rem;
+}
+.skill-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.skill-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.skill-list li::before {
+  content: '?';
+  color: var(--accent);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+/* progress bar for skill level */
+.skill-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.skill-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.resp-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.resp-list li::before { content: '-> '; color: var(--muted); }
+
+.company-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+.company-pill {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* -- OVERLAP MATRIX --------------------------------- */
+.overlap-container {
+  margin-bottom: 3rem;
+  overflow-x: auto;
+}
+.overlap-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.4rem;
+  margin-bottom: 0.4rem;
+}
+.overlap-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.matrix-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.82rem;
+}
+.matrix-table th, .matrix-table td {
+  border: 1px solid var(--border);
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+  vertical-align: top;
+}
+.matrix-table th {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.45rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  background: var(--card-bg);
+  white-space: nowrap;
+}
+.matrix-table td:first-child {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text);
+  background: var(--card-bg);
+  white-space: nowrap;
+}
+.dot-yes  { color: var(--green); font-weight: 700; font-size: 1.1rem; }
+.dot-part { color: var(--orange); font-weight: 700; font-size: 1.1rem; }
+.dot-no   { color: var(--border); font-size: 1.1rem; }
+
+/* -- LEARNING PATH ---------------------------------- */
+.path-container {
+  margin-bottom: 3rem;
+}
+.path-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.path-tab {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.48rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--card-bg);
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+}
+.path-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(26,26,229,0.06);
+}
+
+.path-content { display: none; }
+.path-content.active { display: block; }
+
+.path-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.path-stage {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.2rem;
+  position: relative;
+}
+.stage-num {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.55rem;
+  color: var(--accent);
+  margin-bottom: 0.7rem;
+}
+.stage-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.stage-items {
+  list-style: none;
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.stage-items li::before { content: ' -  '; }
+
+/* -- GITHUB REPO CARD ------------------------------- */
+.repo-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2rem;
+  margin-bottom: 3rem;
+}
+.repo-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.2rem;
+}
+.repo-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.4rem;
+}
+.repo-link {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid currentColor;
+  padding: 0.3rem 0.6rem;
+  border-radius: 2px;
+}
+.repo-link:hover { background: rgba(26,26,229,0.06); }
+.repo-tree {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1.8;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1rem 1.5rem;
+  overflow-x: auto;
+}
+.repo-tree .dir { color: var(--accent); }
+.repo-tree .file { color: var(--text); }
+.repo-tree .comment { color: var(--muted); }
+
+/* -- FOOTER ----------------------------------------- */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 2.5rem;
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.48rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--accent); }
+
+/* -- TOOLTIP ---------------------------------------- */
+#tooltip {
+  position: fixed;
+  pointer-events: none;
+  background: var(--text);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 2px;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.1s;
+  max-width: 240px;
+  line-height: 1.4;
+}
+#tooltip.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- TOOLTIP -->
+<div id="tooltip"></div>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="../../index.html">GEO-INSTRUCTOR</a>
+  <div class="nav-links">
+    <a href="../../index.html">[ WORK ]</a>
+    <a href="#">[ ABOUT ]</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-eyebrow">CAREER ATLAS  -  2026</div>
+  <h1 class="hero-title">The 3D Geometry <em>Career Map</em></h1>
+  <p class="hero-sub">
+    Nine roles. One knowledge graph. Understand how CAD, SLAM, WebGL,
+    Gaussian Splatting, SDF, and Motion Capture share the same geometric DNA --
+    and chart your path through them.
+  </p>
+  <div class="hero-tags">
+    <span class="tag active">CAD</span>
+    <span class="tag active">Grasshopper</span>
+    <span class="tag active">SLAM</span>
+    <span class="tag active">Point Cloud</span>
+    <span class="tag active">Three.js</span>
+    <span class="tag active">WebGL</span>
+    <span class="tag active">Gaussian Splatting</span>
+    <span class="tag active">SDF</span>
+    <span class="tag active">Motion Capture</span>
+    <span class="tag active">GIS</span>
+    <span class="tag active">FEM / Simulation</span>
+  </div>
+</header>
+
+<div class="divider">// -- KNOWLEDGE GRAPH -------------------------------------</div>
+
+<!-- MAIN CONTENT -->
+<main class="main-layout">
+
+  <!-- 1. KNOWLEDGE GRAPH -->
+  <section style="margin-bottom:3rem;">
+    <div class="section-header">
+      <h2>Skill Overlap Graph</h2>
+      <p>Nodes = skills. Edges = shared between roles. Drag nodes. Click to highlight.</p>
+    </div>
+    <div class="graph-container">
+      <svg id="graph-canvas"></svg>
+      <div class="graph-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#1A1AE5"></div> CAD / Parametric</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#C0392B"></div> Robotics / SLAM</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2D6A4F"></div> Point Cloud / 3D Vision</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#D35400"></div> Web 3D / Graphics</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6C3483"></div> NeRF / Gaussian Splatting</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#0E7C7B"></div> Simulation / FEM</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#B7950B"></div> Motion Capture</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#5D6D7E"></div> GIS / Digital Twin</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#884EA0"></div> SDF / Geometry</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider" style="padding:0 0 2rem;">// -- ROLES -----------------------------------------------</div>
+
+  <!-- 2. ROLE CARDS -->
+  <section style="margin-bottom:3rem;">
+    <div class="section-header">
+      <h2>Nine Roles, One Geometry</h2>
+      <p>Click any card to expand full skill profile, responsibilities, and top employers.</p>
+    </div>
+    <div class="role-grid" id="role-grid"></div>
+    <!-- DETAIL PANEL -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-panel-header">
+        <h2 class="detail-panel-title" id="dp-title"></h2>
+        <button class="detail-panel-close" onclick="closeDetail()">[ X ]</button>
+      </div>
+      <div id="dp-body"></div>
+    </div>
+  </section>
+
+  <div class="divider" style="padding:0 0 2rem;">// -- OVERLAP ---------------------------------------------</div>
+
+  <!-- 3. OVERLAP MATRIX -->
+  <section class="overlap-container">
+    <div class="section-header">
+      <h2 class="overlap-title">Skill Transfer Matrix</h2>
+      <p class="overlap-sub">
+        &#9679; = core requirement &nbsp; &#9680; = partial / useful &nbsp;  -  = not required
+      </p>
+    </div>
+    <table class="matrix-table" id="matrix-table"></table>
+  </section>
+
+  <div class="divider" style="padding:0 0 2rem;">// -- LEARNING PATHS --------------------------------------</div>
+
+  <!-- 4. LEARNING PATHS -->
+  <section class="path-container">
+    <div class="section-header">
+      <h2>Learning Paths</h2>
+      <p>Staged roadmap for each role. Start from zero, build to employable.</p>
+    </div>
+    <div class="path-tabs" id="path-tabs"></div>
+    <div id="path-contents"></div>
+  </section>
+
+  <div class="divider" style="padding:0 0 2rem;">// -- REPO STRUCTURE --------------------------------------</div>
+
+  <!-- 5. REPO STRUCTURE -->
+  <section>
+    <div class="repo-card">
+      <div class="repo-card-header">
+        <h2 class="repo-title">Workthrough Repository Structure</h2>
+        <a class="repo-link" href="#" id="repo-link">[ github ]</a>
+      </div>
+      <pre class="repo-tree" id="repo-tree"></pre>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <p>GEO-INSTRUCTOR &nbsp; - &nbsp; <a href="../../index.html">back to index</a> &nbsp; - &nbsp; 2026</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+// ===================================================
+// DATA
+// ===================================================
+
+const ROLES = [
+  {
+    id: 'cad',
+    title: 'Computational Designer',
+    subtitle: 'CAD  -  Grasshopper  -  Parametric',
+    color: '#1A1AE5',
+    salary: '$120K -- $200K',
+    demand: 'Moderate',
+    degree: 'M.Arch / M.S.',
+    chips: ['Grasshopper', 'Rhino', 'Python', 'C#', 'Revit'],
+    skills: [
+      { name: 'Grasshopper 3D', level: 95 },
+      { name: 'Rhinoceros / RhinoCommon', level: 90 },
+      { name: 'Python / GhPython', level: 80 },
+      { name: 'C# (RhinoCommon SDK)', level: 70 },
+      { name: 'Revit + Dynamo', level: 65 },
+      { name: 'Parametric Geometry', level: 95 },
+      { name: 'FEA Integration (Karamba3D)', level: 55 },
+      { name: 'Fabrication-aware design', level: 60 },
+    ],
+    responsibilities: [
+      'Develop Grasshopper scripts for facade rationalization',
+      'Build Dynamo workflows for BIM automation',
+      'Write custom plugins in C# / RhinoCommon',
+      'Bridge design intent with fabrication constraints',
+      'Research topology optimization & generative design',
+    ],
+    companies: ['Arup', 'HOK', 'HDR', 'Walter P Moore', 'Lockheed', 'Molg', 'Zaha Hadid Architects'],
+    path: [
+      { stage: '01 FOUNDATION', title: 'Geometry Basics', items: ['Vectors, planes, transformations', 'NURBS surfaces', 'Mesh topology', 'Rhino 3D basics'] },
+      { stage: '02 PARAMETRIC', title: 'Grasshopper', items: ['Data trees & lists', 'GhPython scripting', 'Surface panelization', 'Mesh subdivision'] },
+      { stage: '03 FABRICATION', title: 'Physical Making', items: ['CNC, laser-cut workflows', 'Panel rationalization', 'Karamba3D structural', 'Kangaroo physics'] },
+      { stage: '04 CODE', title: 'Plugin Dev', items: ['C# + RhinoCommon', 'Custom Grasshopper components', 'REST APIs for Speckle/ShapeDiver', 'Revit API / Dynamo nodes'] },
+    ],
+  },
+  {
+    id: 'slam',
+    title: 'SLAM Engineer',
+    subtitle: 'Robotics  -  Localization  -  Mapping',
+    color: '#C0392B',
+    salary: '$160K -- $280K',
+    demand: 'Very High',
+    degree: 'M.S. / Ph.D.',
+    chips: ['C++', 'ROS2', 'GTSAM', 'LiDAR', 'EKF'],
+    skills: [
+      { name: 'C++ (primary language)', level: 95 },
+      { name: 'ROS / ROS2', level: 90 },
+      { name: 'GTSAM / g2o (factor graphs)', level: 85 },
+      { name: 'Sensor fusion (LiDAR+IMU+camera)', level: 90 },
+      { name: 'Extended / Unscented Kalman Filter', level: 80 },
+      { name: 'Loop closure & pose graph opt.', level: 80 },
+      { name: 'Point cloud processing (PCL)', level: 70 },
+      { name: 'Python (prototyping)', level: 60 },
+    ],
+    responsibilities: [
+      'Design real-time SLAM pipelines for AVs / robots',
+      'Integrate LiDAR, camera, IMU sensor modalities',
+      'Build HD mapping and localization systems',
+      'Tune EKF / factor-graph state estimation',
+      'Benchmark against KITTI, NuScenes datasets',
+    ],
+    companies: ['Waymo', 'Cruise', 'Aurora', 'Boston Dynamics', 'Skydio', 'Apple Maps', 'Meta AR/VR'],
+    path: [
+      { stage: '01 MATH', title: 'Probability & Geometry', items: ['Bayes theorem', 'Lie groups / SO(3), SE(3)', 'Kalman filtering', 'Nonlinear optimization'] },
+      { stage: '02 SENSORS', title: 'Sensor Modalities', items: ['LiDAR point clouds', 'Stereo / depth cameras', 'IMU pre-integration', 'GPS / wheel odometry'] },
+      { stage: '03 ALGORITHMS', title: 'Core SLAM', items: ['ICP registration', 'ORB-SLAM3 visual SLAM', 'LOAM LiDAR odometry', 'iSAM2 / Ceres factor graph'] },
+      { stage: '04 SYSTEMS', title: 'Production', items: ['ROS2 node architecture', 'Real-time C++ constraints', 'KITTI/NuScenes eval', 'Docker CI pipelines'] },
+    ],
+  },
+  {
+    id: 'pc',
+    title: '3D Vision / Point Cloud',
+    subtitle: 'LiDAR  -  Registration  -  Reconstruction',
+    color: '#2D6A4F',
+    salary: '$130K -- $210K',
+    demand: 'High',
+    degree: 'B.S. / M.S.',
+    chips: ['Python', 'PCL', 'Open3D', 'ICP', 'CUDA'],
+    skills: [
+      { name: 'Python (primary)', level: 95 },
+      { name: 'Open3D / PCL', level: 90 },
+      { name: 'ICP & variants', level: 85 },
+      { name: 'C++ (performance)', level: 70 },
+      { name: 'CUDA (GPU accel.)', level: 65 },
+      { name: 'PointNet / deep 3D', level: 70 },
+      { name: 'COLMAP (SfM)', level: 65 },
+      { name: 'LAS/LAZ formats (PDAL)', level: 60 },
+    ],
+    responsibilities: [
+      'Process raw LiDAR / depth sensor data',
+      'Build registration, segmentation, classification pipelines',
+      'Implement 3D reconstruction (Poisson, ball-pivoting)',
+      'Apply deep learning models for 3D scene understanding',
+      'Scan-to-BIM workflows (Matterport, NavVis)',
+    ],
+    companies: ['Leica / Hexagon', 'FARO', 'Matterport', 'Apple LiDAR', 'Amazon Robotics', 'Autodesk', 'Bentley'],
+    path: [
+      { stage: '01 BASICS', title: 'Point Cloud 101', items: ['XYZ formats, normals', 'Voxel grids, downsampling', 'KD-tree / octree queries', 'Visualize in Open3D'] },
+      { stage: '02 REGISTRATION', title: 'Alignment', items: ['ICP algorithm', 'NDT (Normal Distributions)', 'Global FPFH descriptors', 'RANSAC pose estimation'] },
+      { stage: '03 PROCESSING', title: 'Segmentation & Mesh', items: ['Plane / cluster segmentation', 'Marching cubes', 'Poisson reconstruction', 'Mesh decimation'] },
+      { stage: '04 DEEP LEARNING', title: 'Neural 3D', items: ['PointNet++', 'VoxelNet / CenterPoint', 'CUDA custom ops', 'Benchmark on KITTI / S3DIS'] },
+    ],
+  },
+  {
+    id: 'webgl',
+    title: 'WebGL / Three.js Engineer',
+    subtitle: 'Browser 3D  -  Shaders  -  Spatial Web',
+    color: '#D35400',
+    salary: '$130K -- $230K',
+    demand: 'High',
+    degree: 'B.S. CS / equivalent',
+    chips: ['TypeScript', 'Three.js', 'GLSL', 'WebGPU', 'R3F'],
+    skills: [
+      { name: 'JavaScript / TypeScript', level: 95 },
+      { name: 'Three.js', level: 90 },
+      { name: 'GLSL shaders', level: 85 },
+      { name: 'WebGPU / WGSL', level: 65 },
+      { name: 'React Three Fiber', level: 75 },
+      { name: 'CesiumJS (geospatial)', level: 55 },
+      { name: 'glTF / DRACO / KTX2', level: 70 },
+      { name: 'WebXR / AR integration', level: 60 },
+    ],
+    responsibilities: [
+      'Build real-time 3D visualizations in the browser',
+      'Write custom GLSL vertex/fragment shaders',
+      'Optimize render pipelines (draw calls, batching, LOD)',
+      'Integrate WebXR / AR / VR for Vision Pro web',
+      'Handle large datasets: point clouds, 3D Tiles, terrain',
+    ],
+    companies: ['Apple Spatial', 'Cesium', 'Sketchfab / Fab', 'Spline Design', 'Shopify 3D', 'NVIDIA Omniverse web'],
+    path: [
+      { stage: '01 RENDERING', title: 'Graphics Pipeline', items: ['Rasterization pipeline', 'Vertex + fragment shaders', 'Textures, normals, PBR', 'Three.js scene graph'] },
+      { stage: '02 SHADERS', title: 'Custom GLSL', items: ['GLSL syntax', 'uniforms, varyings', 'Post-processing (EffectComposer)', 'Particle systems GPU'] },
+      { stage: '03 PERF', title: 'Optimization', items: ['Instanced meshes', 'LOD levels', 'WebWorkers for geometry', 'GPU picking'] },
+      { stage: '04 ADVANCED', title: 'WebGPU / XR', items: ['WebGPU compute shaders', 'WebXR session API', 'Gaussian splat rendering', 'CesiumJS 3D Tiles'] },
+    ],
+  },
+  {
+    id: 'nerf',
+    title: 'NeRF / Gaussian Splatting',
+    subtitle: 'Neural Radiance  -  3D Reconstruction  -  AI',
+    color: '#6C3483',
+    salary: '$150K -- $350K',
+    demand: 'Red Hot',
+    degree: 'M.S. / Ph.D.',
+    chips: ['Python', 'CUDA', 'PyTorch', 'COLMAP', '3DGS'],
+    skills: [
+      { name: 'Python + PyTorch', level: 95 },
+      { name: 'CUDA kernel writing', level: 85 },
+      { name: '3D Gaussian Splatting', level: 90 },
+      { name: 'NeRF variants (Nerfstudio)', level: 85 },
+      { name: 'COLMAP (SfM)', level: 80 },
+      { name: 'Differentiable rendering', level: 80 },
+      { name: 'Camera calibration', level: 75 },
+      { name: 'Triton / TensorRT', level: 60 },
+    ],
+    responsibilities: [
+      'Train and fine-tune NeRF / 3DGS models',
+      'Write custom CUDA rasterization kernels',
+      'Build multi-view 3D reconstruction pipelines',
+      'Publish research at CVPR, ICCV, NeurIPS',
+      'Optimize inference for real-time / mobile rendering',
+    ],
+    companies: ['Luma AI', 'NVIDIA Research', 'Google Research', 'Meta Codec Avatars', 'Apple ARKit', 'Wayve', 'Polycam'],
+    path: [
+      { stage: '01 RENDERING', title: '3D Rendering Math', items: ['Ray casting / marching', 'Volume rendering integral', 'Camera models', 'PBR materials'] },
+      { stage: '02 NERF', title: 'Neural Radiance Fields', items: ['NeRF original paper', 'Instant-NGP hash encoding', 'Nerfstudio pipeline', 'PSNR / SSIM eval'] },
+      { stage: '03 GAUSSIAN', title: '3D Gaussian Splatting', items: ['3DGS paper (Kerbl 2023)', 'Spherical harmonics', 'CUDA rasterizer', '4DGS / 2DGS variants'] },
+      { stage: '04 CUDA', title: 'Custom Kernels', items: ['CUDA C++ basics', 'Triton (Python GPU)', 'Custom autograd', 'Multi-GPU training'] },
+    ],
+  },
+  {
+    id: 'fem',
+    title: 'Simulation / FEM Engineer',
+    subtitle: 'Physics  -  FEA  -  Houdini  -  CUDA',
+    color: '#0E7C7B',
+    salary: '$120K -- $300K',
+    demand: 'Steady',
+    degree: 'M.S. Eng. / CS',
+    chips: ['C++', 'CUDA', 'Houdini', 'Warp', 'MuJoCo'],
+    skills: [
+      { name: 'C++ (simulation kernels)', level: 90 },
+      { name: 'CUDA / NVIDIA Warp', level: 80 },
+      { name: 'Houdini + Houdini Engine', level: 75 },
+      { name: 'FEM theory (elasticity)', level: 85 },
+      { name: 'Numerical methods / PDEs', level: 85 },
+      { name: 'PhysX / Unreal Chaos', level: 65 },
+      { name: 'MuJoCo (robotics sim)', level: 60 },
+      { name: 'Taichi / JAX physics', level: 55 },
+    ],
+    responsibilities: [
+      'Develop cloth, fluid, rigid/soft body simulations',
+      'Implement FEM solvers for linear/nonlinear elasticity',
+      'Port simulations to GPU via CUDA / Warp',
+      'Build Houdini procedural pipelines for VFX / games',
+      'Develop physics-informed neural networks (PINNs)',
+    ],
+    companies: ['NVIDIA', 'Epic / Unreal', 'ILM / Pixar / Weta', 'EA / Naughty Dog', 'Ansys', 'Tesla', 'SideFX'],
+    path: [
+      { stage: '01 MATH', title: 'Numerical Methods', items: ['ODEs / PDEs', 'Finite differences', 'Linear solvers (CG, GMRES)', 'Time integration (RK4, BDF)'] },
+      { stage: '02 SIMULATION', title: 'Physics Sim', items: ['Mass-spring systems', 'Position-based dynamics', 'XPBD constraints', 'Rigid body contact'] },
+      { stage: '03 FEM', title: 'Finite Elements', items: ['Tetrahedral FEM', 'Neo-Hookean elasticity', 'Corotational FEM', 'Karamba3D intro'] },
+      { stage: '04 GPU', title: 'GPU Physics', items: ['CUDA parallelism', 'NVIDIA Warp (Python)', 'Taichi GPU kernels', 'Differentiable simulation'] },
+    ],
+  },
+  {
+    id: 'mocap',
+    title: 'Motion Capture TD',
+    subtitle: 'Vicon  -  Retargeting  -  Virtual Production',
+    color: '#B7950B',
+    salary: '$90K -- $180K',
+    demand: 'Niche',
+    degree: 'B.S. / Portfolio',
+    chips: ['Python', 'Maya', 'Vicon', 'Xsens', 'MotionBuilder'],
+    skills: [
+      { name: 'Vicon Shogun / OptiTrack Motive', level: 90 },
+      { name: 'Maya + Python/MEL scripting', level: 80 },
+      { name: 'MotionBuilder (retargeting)', level: 75 },
+      { name: 'Xsens MVN (inertial mocap)', level: 70 },
+      { name: 'Unreal / Unity real-time VP', level: 65 },
+      { name: 'Skeletal animation / rigging', level: 75 },
+      { name: 'FaceWare / Dynamixyz (facial)', level: 50 },
+      { name: 'C++ (engine tools)', level: 45 },
+    ],
+    responsibilities: [
+      'Daily calibration of Vicon capture volume',
+      'Mark up performers, props, cameras for capture',
+      'Process mocap data: tracking -> solving',
+      'Retargeting assets for real-time VP (StageCraft)',
+      'Lens calibration, camera offset protocols',
+    ],
+    companies: ['ILM / Disney', 'Weta Digital', 'Epic (MetaHuman)', 'Activision / Naughty Dog', 'Electronic Arts', 'Bandai Namco', 'Virtual Production studios'],
+    path: [
+      { stage: '01 ANIMATION', title: 'Animation Basics', items: ['Keyframe animation', 'Skeletal rigs', '12 principles of animation', 'Character anatomy'] },
+      { stage: '02 PIPELINE', title: 'Mocap Pipeline', items: ['Optical vs inertial systems', 'Vicon Shogun calibration', 'Solving & cleaning data', 'Retargeting in MotionBuilder'] },
+      { stage: '03 REALTIME', title: 'Virtual Production', items: ['Unreal Engine live link', 'MetaHuman face capture', 'LED volume / StageCraft', 'In-camera VFX'] },
+      { stage: '04 TOOLS', title: 'Pipeline Dev', items: ['Maya Python scripting', 'USD / OpenTimelineIO', 'Custom solvers in C++', 'FaceWare facial cap'] },
+    ],
+  },
+  {
+    id: 'gis',
+    title: 'Spatial Computing / GIS',
+    subtitle: 'Digital Twin  -  Cesium  -  ArcGIS',
+    color: '#5D6D7E',
+    salary: '$110K -- $200K',
+    demand: 'Growing',
+    degree: 'B.S. GIS / CS',
+    chips: ['Python', 'C++', 'ArcGIS', 'CesiumJS', 'PostGIS'],
+    skills: [
+      { name: 'Python (geoprocessing)', level: 90 },
+      { name: 'C++ (spatial algorithms)', level: 75 },
+      { name: 'ArcGIS / QGIS / GDAL', level: 85 },
+      { name: 'CesiumJS + 3D Tiles', level: 75 },
+      { name: 'PostGIS spatial DB', level: 70 },
+      { name: 'BIM / Revit API / IFC', level: 60 },
+      { name: 'Point cloud (PDAL/LAStools)', level: 65 },
+      { name: 'Coordinate systems / proj', level: 85 },
+    ],
+    responsibilities: [
+      'Develop ArcGIS Pro / Enterprise features',
+      'Build digital twin platforms with Cesium / Bentley iTwin',
+      'Implement spatial indexing, querying, projection systems',
+      'Integrate BIM data (IFC, Revit) with GIS workflows',
+      'Build GeoAI / machine learning integrations',
+    ],
+    companies: ['Esri', 'Cesium GS', 'Bentley Systems', 'Autodesk Tandem', 'Trimble', 'Hexagon', 'NVIDIA Omniverse', 'Google Maps'],
+    path: [
+      { stage: '01 GIS', title: 'Spatial Fundamentals', items: ['Coordinate systems, projections', 'GeoJSON, Shapefile, GeoTIFF', 'QGIS / ArcGIS basics', 'Spatial SQL (PostGIS)'] },
+      { stage: '02 3D', title: '3D Spatial Data', items: ['LAS/LAZ point clouds', 'CityGML, 3D Tiles', 'CesiumJS globe rendering', 'Cesium Ion cloud processing'] },
+      { stage: '03 DIGITAL TWIN', title: 'BIM Integration', items: ['Revit API', 'IFC format parsing', 'Bentley iTwin / Autodesk Tandem', 'Sensor data integration'] },
+      { stage: '04 SCALE', title: 'Planetary Scale', items: ['NVIDIA Omniverse Earth2', 'Google Maps Platform', 'Deck.gl large data viz', 'Real-time streaming 3D Tiles'] },
+    ],
+  },
+  {
+    id: 'sdf',
+    title: 'SDF / Geometry Processing',
+    subtitle: 'Implicit Surfaces  -  Remesh  -  Neural Geometry',
+    color: '#884EA0',
+    salary: '$130K -- $280K',
+    demand: 'Research-Intensive',
+    degree: 'M.S. / Ph.D.',
+    chips: ['C++', 'Python', 'libigl', 'CGAL', 'CUDA'],
+    skills: [
+      { name: 'C++ (geometry kernels)', level: 90 },
+      { name: 'libigl / CGAL', level: 85 },
+      { name: 'Differential geometry theory', level: 85 },
+      { name: 'SDF / Level sets', level: 90 },
+      { name: 'Marching cubes / Dual Contouring', level: 80 },
+      { name: 'Mesh repair / remeshing', level: 80 },
+      { name: 'Neural implicit (NeuS, NDF)', level: 70 },
+      { name: 'OpenGL / Vulkan (SDF vis)', level: 60 },
+    ],
+    responsibilities: [
+      'Research and implement SDF-based shape representations',
+      'Develop mesh repair, remeshing, Boolean ops',
+      'Build neural implicit surface models (NeuS, NDF)',
+      'Design geometry processing pipelines (Poisson, alpha shapes)',
+      'Contribute to open-source geometry libraries',
+    ],
+    companies: ['NVIDIA Research', 'Adobe Substance 3D', 'Autodesk Research', 'Pixar / DreamWorks', 'Apple Vision Pro', 'Ansys', 'Google DeepMind'],
+    path: [
+      { stage: '01 GEOMETRY', title: 'Computational Geometry', items: ['NURBS vs mesh vs implicit', 'Half-edge data structure', 'Convex hull, Voronoi', 'Alpha shapes, Delaunay'] },
+      { stage: '02 IMPLICIT', title: 'SDFs & Level Sets', items: ['Signed distance transform', 'Sphere tracing / ray marching', 'CSG Boolean ops', 'Level set evolution'] },
+      { stage: '03 MESH OPS', title: 'Mesh Processing', items: ['libigl tutorials', 'Laplacian smoothing', 'Isotropic remeshing', 'Poisson surface recon'] },
+      { stage: '04 NEURAL', title: 'Neural Geometry', items: ['Occupancy Networks', 'NeuS / NDF implicit', 'Instant-NGP SDF', 'DeepSDF + shape priors'] },
+    ],
+  },
+];
+
+// Shared skills matrix: skill -> which roles need it
+const SKILL_MATRIX = [
+  { skill: 'Python',            cad:1, slam:1, pc:1, webgl:0, nerf:1, fem:1, mocap:1, gis:1, sdf:1 },
+  { skill: 'C++',               cad:0, slam:1, pc:1, webgl:0, nerf:1, fem:1, mocap:0, gis:1, sdf:1 },
+  { skill: 'CUDA / GPU',        cad:0, slam:0, pc:1, webgl:1, nerf:1, fem:1, mocap:0, gis:0, sdf:1 },
+  { skill: 'Linear Algebra',    cad:1, slam:1, pc:1, webgl:1, nerf:1, fem:1, mocap:0, gis:1, sdf:1 },
+  { skill: 'Mesh Geometry',     cad:1, slam:0, pc:1, webgl:1, nerf:0, fem:1, mocap:1, gis:0, sdf:1 },
+  { skill: 'Point Cloud',       cad:0, slam:1, pc:1, webgl:0, nerf:1, fem:0, mocap:0, gis:1, sdf:1 },
+  { skill: 'Spatial Indexing',  cad:0, slam:1, pc:1, webgl:1, nerf:0, fem:0, mocap:0, gis:1, sdf:1 },
+  { skill: 'Optimization',      cad:1, slam:1, pc:1, webgl:0, nerf:1, fem:1, mocap:0, gis:0, sdf:1 },
+  { skill: 'SLAM / Registration',cad:0, slam:1, pc:1, webgl:0, nerf:0, fem:0, mocap:0, gis:0, sdf:0 },
+  { skill: 'Differentiable Render',cad:0,slam:0,pc:0, webgl:1, nerf:1, fem:1, mocap:0, gis:0, sdf:1 },
+  { skill: 'Shaders (GLSL)',    cad:0, slam:0, pc:0, webgl:1, nerf:0, fem:0, mocap:0, gis:0, sdf:0 },
+  { skill: 'SDF / Implicit',    cad:0, slam:0, pc:0, webgl:0, nerf:1, fem:0, mocap:0, gis:0, sdf:1 },
+  { skill: 'Camera Calibration',cad:0, slam:1, pc:1, webgl:0, nerf:1, fem:0, mocap:1, gis:0, sdf:0 },
+  { skill: 'Real-time Engine',  cad:0, slam:0, pc:0, webgl:1, nerf:0, fem:1, mocap:1, gis:1, sdf:0 },
+  { skill: 'BIM / CAD Format',  cad:1, slam:0, pc:1, webgl:0, nerf:0, fem:0, mocap:0, gis:1, sdf:0 },
+  { skill: '3D Math (SE3/SO3)', cad:0, slam:1, pc:1, webgl:1, nerf:1, fem:1, mocap:1, gis:1, sdf:1 },
+  { skill: 'ROS / Robotics',    cad:0, slam:1, pc:0, webgl:0, nerf:0, fem:0, mocap:0, gis:0, sdf:0 },
+  { skill: 'Deep Learning (3D)',cad:0, slam:0, pc:1, webgl:0, nerf:1, fem:1, mocap:0, gis:0, sdf:1 },
+];
+
+// ===================================================
+// FORCE GRAPH  (D3 v7)
+// ===================================================
+(function buildGraph() {
+  const svg = d3.select('#graph-canvas');
+  const container = document.getElementById('graph-canvas').parentElement;
+
+  function resize() {
+    const W = container.clientWidth;
+    const H = 560;
+    svg.attr('width', W).attr('height', H);
+    return { W, H };
+  }
+  let { W, H } = resize();
+
+  // Build nodes: roles + skill-cluster nodes
+  const roleNodes = ROLES.map(r => ({ id: r.id, label: r.title.split('\n')[0], color: r.color, type: 'role', r: 22 }));
+
+  // Skill hub nodes (shared skills only -- appear in >=2 roles)
+  const roleIds = ['cad','slam','pc','webgl','nerf','fem','mocap','gis','sdf'];
+  const skillNodes = [];
+  const links = [];
+
+  SKILL_MATRIX.forEach(row => {
+    const active = roleIds.filter(rid => row[rid]);
+    if (active.length < 2) return;
+    const sid = 'sk_' + row.skill.replace(/\W+/g, '_');
+    skillNodes.push({ id: sid, label: row.skill, color: '#8A857E', type: 'skill', r: 9 });
+    active.forEach(rid => links.push({ source: rid, target: sid, weight: active.length }));
+  });
+
+  const nodes = [...roleNodes, ...skillNodes];
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(d => d.weight > 5 ? 90 : 130).strength(0.4))
+    .force('charge', d3.forceManyBody().strength(-320))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide(d => d.r + 14));
+
+  const g = svg.append('g');
+
+  // Zoom
+  svg.call(d3.zoom().scaleExtent([0.4, 2.5]).on('zoom', e => g.attr('transform', e.transform)));
+
+  const link = g.append('g')
+    .selectAll('line')
+    .data(links)
+    .enter().append('line')
+    .attr('stroke', '#D4D0CC')
+    .attr('stroke-width', d => Math.sqrt(d.weight) * 0.6)
+    .attr('stroke-opacity', 0.6);
+
+  const node = g.append('g')
+    .selectAll('g')
+    .data(nodes)
+    .enter().append('g')
+    .attr('cursor', 'grab')
+    .call(d3.drag()
+      .on('start', (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag',  (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+      .on('end',   (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+    );
+
+  node.append('circle')
+    .attr('r', d => d.r)
+    .attr('fill', d => d.color)
+    .attr('fill-opacity', d => d.type === 'role' ? 1 : 0.55)
+    .attr('stroke', d => d.type === 'role' ? d.color : '#8A857E')
+    .attr('stroke-width', d => d.type === 'role' ? 2.5 : 1);
+
+  // Role labels
+  node.filter(d => d.type === 'role').append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => d.r + 14)
+    .attr('font-family', 'Press Start 2P, monospace')
+    .attr('font-size', '6px')
+    .attr('fill', '#2A2622')
+    .attr('letter-spacing', '0.04em')
+    .text(d => d.id.toUpperCase());
+
+  // Skill labels
+  node.filter(d => d.type === 'skill').append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => d.r + 11)
+    .attr('font-family', 'JetBrains Mono, monospace')
+    .attr('font-size', '7.5px')
+    .attr('fill', '#8A857E')
+    .text(d => d.label);
+
+  // Tooltip on role hover
+  const tip = document.getElementById('tooltip');
+  node.filter(d => d.type === 'role')
+    .on('mousemove', (ev, d) => {
+      const role = ROLES.find(r => r.id === d.id);
+      tip.innerHTML = `<strong>${role.title}</strong><br>${role.salary}<br>Demand: ${role.demand}`;
+      tip.style.left = (ev.clientX + 14) + 'px';
+      tip.style.top  = (ev.clientY - 10) + 'px';
+      tip.classList.add('visible');
+    })
+    .on('mouseleave', () => tip.classList.remove('visible'))
+    .on('click', (ev, d) => { openDetail(d.id); });
+
+  sim.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  window.addEventListener('resize', () => {
+    let dims = resize();
+    sim.force('center', d3.forceCenter(dims.W / 2, dims.H / 2)).alpha(0.3).restart();
+  });
+})();
+
+// ===================================================
+// ROLE CARDS
+// ===================================================
+(function buildRoleCards() {
+  const grid = document.getElementById('role-grid');
+  ROLES.forEach(r => {
+    const card = document.createElement('div');
+    card.className = 'role-card';
+    card.id = 'card-' + r.id;
+    card.onclick = () => openDetail(r.id);
+    card.innerHTML = `
+      <div class="role-card-accent" style="background:${r.color}"></div>
+      <div class="role-title">${r.title}</div>
+      <div class="role-subtitle">${r.subtitle}</div>
+      <div class="role-chips">
+        ${r.chips.map(c => `<span class="chip">${c}</span>`).join('')}
+      </div>
+      <div class="role-meta">
+        <span class="salary">${r.salary}</span>
+        <span>${r.demand}</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+})();
+
+// ===================================================
+// DETAIL PANEL
+// ===================================================
+function openDetail(id) {
+  const r = ROLES.find(x => x.id === id);
+  if (!r) return;
+
+  // highlight card
+  document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('card-' + id)?.classList.add('selected');
+
+  document.getElementById('dp-title').textContent = r.title;
+  const body = document.getElementById('dp-body');
+  body.innerHTML = `
+    <div class="detail-cols">
+      <div class="detail-section">
+        <h4>CORE SKILLS</h4>
+        <ul class="skill-list">
+          ${r.skills.map(s => `
+            <li>
+              <span style="flex:1;min-width:140px">${s.name}</span>
+              <div class="skill-bar">
+                <div class="skill-bar-fill" style="width:${s.level}%;background:${r.color}"></div>
+              </div>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+      <div class="detail-section">
+        <h4>RESPONSIBILITIES</h4>
+        <ul class="resp-list">
+          ${r.responsibilities.map(t => `<li>${t}</li>`).join('')}
+        </ul>
+        <br>
+        <h4>DEGREE</h4>
+        <p style="font-size:0.85rem;margin-bottom:1rem">${r.degree}</p>
+        <h4>TOP EMPLOYERS</h4>
+        <div class="company-pills">
+          ${r.companies.map(c => `<span class="company-pill">${c}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const panel = document.getElementById('detail-panel');
+  panel.classList.add('visible');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('visible');
+  document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+}
+
+// ===================================================
+// OVERLAP MATRIX
+// ===================================================
+(function buildMatrix() {
+  const roleIds = ['cad','slam','pc','webgl','nerf','fem','mocap','gis','sdf'];
+  const headers = ['Skill','CAD','SLAM','Point Cloud','WebGL','NeRF/3DGS','FEM/Sim','Mocap','GIS','SDF/Geo'];
+  const table = document.getElementById('matrix-table');
+
+  // header row
+  const thead = document.createElement('thead');
+  const hr = document.createElement('tr');
+  headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; hr.appendChild(th); });
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  // body rows
+  const tbody = document.createElement('tbody');
+  SKILL_MATRIX.forEach(row => {
+    const tr = document.createElement('tr');
+    const td0 = document.createElement('td'); td0.textContent = row.skill; tr.appendChild(td0);
+    roleIds.forEach(rid => {
+      const td = document.createElement('td');
+      const v = row[rid];
+      if (v === 1)       { td.innerHTML = '<span class="dot-yes">&#9679;</span>'; }
+      else if (v === 0.5){ td.innerHTML = '<span class="dot-part">&#9680;</span>'; }
+      else               { td.innerHTML = '<span class="dot-no"> - </span>'; }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+})();
+
+// ===================================================
+// LEARNING PATHS
+// ===================================================
+(function buildPaths() {
+  const tabs  = document.getElementById('path-tabs');
+  const pane  = document.getElementById('path-contents');
+
+  ROLES.forEach((r, i) => {
+    // Tab
+    const btn = document.createElement('button');
+    btn.className = 'path-tab' + (i === 0 ? ' active' : '');
+    btn.textContent = r.id.toUpperCase();
+    btn.style.borderColor = i === 0 ? r.color : '';
+    btn.style.color = i === 0 ? r.color : '';
+    btn.onclick = () => {
+      document.querySelectorAll('.path-tab').forEach(b => { b.classList.remove('active'); b.style.borderColor=''; b.style.color=''; });
+      btn.classList.add('active');
+      btn.style.borderColor = r.color;
+      btn.style.color = r.color;
+      document.querySelectorAll('.path-content').forEach(p => p.classList.remove('active'));
+      document.getElementById('path-' + r.id).classList.add('active');
+    };
+    tabs.appendChild(btn);
+
+    // Content
+    const content = document.createElement('div');
+    content.className = 'path-content' + (i === 0 ? ' active' : '');
+    content.id = 'path-' + r.id;
+    content.innerHTML = `
+      <div style="margin-bottom:1rem;font-size:0.85rem;color:var(--muted)">
+        ${r.title}  -  ${r.subtitle}
+      </div>
+      <div class="path-stages">
+        ${r.path.map(s => `
+          <div class="path-stage" style="border-left:3px solid ${r.color}">
+            <div class="stage-num">${s.stage}</div>
+            <div class="stage-title">${s.title}</div>
+            <ul class="stage-items">
+              ${s.items.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    pane.appendChild(content);
+  });
+})();
+
+// ===================================================
+// REPO TREE
+// ===================================================
+(function buildRepo() {
+  const tree = document.getElementById('repo-tree');
+  tree.innerHTML = `<span class="dir">3d-geometry-careers/</span>
+<span class="comment">+-- README.md                    # This map + orientation guide</span>
+<span class="dir">+-- 01-cad-grasshopper/</span>
+<span class="file">|   +-- README.md                # Role overview, job titles, companies</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_surface_panel/    # Grasshopper panelization exercise</span>
+<span class="file">|   |   +-- 02_structural_opt/   # Karamba3D + Grasshopper</span>
+<span class="file">|   |   +-- 03_plugin_rhino/     # C# RhinoCommon plugin starter</span>
+<span class="file">|   +-- resources.md             # Papers, tutorials, books</span>
+<span class="dir">+-- 02-slam-robotics/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_kalman_filter/    # EKF from scratch (Python)</span>
+<span class="file">|   |   +-- 02_icp_registration/ # ICP point cloud alignment</span>
+<span class="file">|   |   +-- 03_factor_graph/     # GTSAM pose graph example</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- 03-point-cloud/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_open3d_basics/    # Load, filter, visualize LAS</span>
+<span class="file">|   |   +-- 02_poisson_recon/    # Surface reconstruction</span>
+<span class="file">|   |   +-- 03_pointnet/         # PointNet++ classification</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- 04-webgl-threejs/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_glsl_shaders/     # Custom vertex + fragment shader</span>
+<span class="file">|   |   +-- 02_point_cloud_web/  # Render 1M points in Three.js</span>
+<span class="file">|   |   +-- 03_webgpu_compute/   # WebGPU first compute pass</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- 05-nerf-gaussian-splatting/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_volume_rendering/ # Ray marching + NeRF integral</span>
+<span class="file">|   |   +-- 02_nerfstudio/       # Run Nerfstudio on custom data</span>
+<span class="file">|   |   +-- 03_3dgs_cuda/        # 3DGS rasterizer walkthrough</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- 06-simulation-fem/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_mass_spring/      # PBD mass-spring cloth (Python)</span>
+<span class="file">|   |   +-- 02_fem_elasticity/   # Tetrahedral FEM solver</span>
+<span class="file">|   |   +-- 03_warp_gpu/         # NVIDIA Warp physics intro</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- 07-motion-capture/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_bvh_parser/       # Parse + visualize BVH mocap data</span>
+<span class="file">|   |   +-- 02_retargeting/      # Maya Python retargeting script</span>
+<span class="file">|   |   +-- 03_realtime_unreal/  # Unreal Live Link mocap stream</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- 08-gis-spatial/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_postgis_queries/  # Spatial SQL with PostGIS</span>
+<span class="file">|   |   +-- 02_cesiumjs_globe/   # CesiumJS 3D Tiles globe viewer</span>
+<span class="file">|   |   +-- 03_digital_twin/     # Bentley iTwin starter</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- 09-sdf-geometry/</span>
+<span class="file">|   +-- README.md</span>
+<span class="file">|   +-- exercises/</span>
+<span class="file">|   |   +-- 01_sdf_ops/          # SDF primitives + CSG Boolean ops</span>
+<span class="file">|   |   +-- 02_libigl_mesh/      # libigl remeshing tutorial</span>
+<span class="file">|   |   +-- 03_neural_sdf/       # DeepSDF training from scratch</span>
+<span class="file">|   +-- resources.md</span>
+<span class="dir">+-- shared/</span>
+<span class="file">    +-- math_foundations/        # Linear algebra, SO3/SE3, optimization</span>
+<span class="file">    +-- cpp_geometry_starter/    # CMake + Eigen + libigl template</span>
+<span class="file">    +-- skill_overlap_map.html   # This interactive map!</span>`;
+})();
+</script>
+
+<!-- ── SLAM NOTEBOOKS SECTION ──────────────────────────────────────────── -->
+<style>
+#slam-notebooks {
+  max-width: 960px;
+  margin: 0 auto 80px;
+  padding: 0 24px;
+}
+#slam-notebooks h2.section-heading {
+  font-family: 'Instrument Serif', serif;
+  font-size: 2rem;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+#slam-notebooks .section-sub {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 32px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.nb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+.nb-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.15s;
+}
+.nb-card:hover { transform: translateY(-3px); }
+.nb-num {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.6rem;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+.nb-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.1rem;
+  line-height: 1.3;
+}
+.nb-desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.55;
+  flex: 1;
+}
+.nb-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nb-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  color: var(--muted);
+}
+.nb-links {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.nb-colab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  background: #F9AB00;
+  color: #000;
+  padding: 5px 12px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: opacity 0.15s;
+}
+.nb-colab:hover { opacity: 0.85; }
+.nb-github {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 5px 0;
+  border-bottom: 1px solid transparent;
+}
+.nb-github:hover { border-bottom-color: var(--accent); }
+.nb-prereq {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--green);
+}
+.slam-pipeline {
+  margin-top: 40px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  padding: 28px 32px;
+}
+.slam-pipeline h3 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+.pipeline-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.pipeline-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 140px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  text-align: center;
+}
+.pipeline-box .pb-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.pipeline-box .pb-tech {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.pipeline-arrow {
+  font-size: 1.1rem;
+  color: var(--border);
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.pipeline-box.active {
+  border-color: var(--accent);
+  background: #1A1AE508;
+}
+.pipeline-box.active .pb-label { color: var(--accent); }
+</style>
+
+<section id="slam-notebooks">
+  <h2 class="section-heading">SLAM Hands-On Notebooks</h2>
+  <p class="section-sub">[ numpy + scipy only &nbsp;·&nbsp; no GPU &nbsp;·&nbsp; free Colab ]</p>
+
+  <div class="nb-grid">
+
+    <!-- NB 01 -->
+    <div class="nb-card">
+      <div class="nb-num">NB 01 / 03</div>
+      <div class="nb-title">Kalman Filter &amp; EKF<br>Robot Tracking from Scratch</div>
+      <div class="nb-desc">
+        Build a 1-D linear Kalman Filter then extend to a 2-D robot driving
+        in a circle using the nonlinear CTRV motion model. Verify every Jacobian
+        against finite differences. Visualise covariance ellipses shrinking as
+        the filter gains confidence.
+      </div>
+      <div class="nb-tags">
+        <span class="nb-tag">EKF</span>
+        <span class="nb-tag">sensor fusion</span>
+        <span class="nb-tag">Jacobian</span>
+        <span class="nb-tag">covariance</span>
+        <span class="nb-tag">odometry</span>
+      </div>
+      <div class="nb-prereq">prereq: numpy basics, partial derivatives</div>
+      <div class="nb-links">
+        <a class="nb-colab"
+           href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/slam/01_ekf_robot_tracking.ipynb"
+           target="_blank" rel="noopener">
+          &#9654; Open in Colab
+        </a>
+        <a class="nb-github"
+           href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/slam/01_ekf_robot_tracking.ipynb"
+           target="_blank" rel="noopener">
+          [ github ]
+        </a>
+      </div>
+    </div>
+
+    <!-- NB 02 -->
+    <div class="nb-card">
+      <div class="nb-num">NB 02 / 03</div>
+      <div class="nb-title">ICP: Aligning Two Point<br>Clouds from Scratch</div>
+      <div class="nb-desc">
+        Implement Point-to-Point ICP with the SVD closed-form solution, then
+        accelerate it with a KD-tree and benchmark vs brute force. Estimate
+        surface normals via PCA and upgrade to Point-to-Plane ICP —
+        the variant used in LOAM and KISS-ICP. Explore the basin of convergence.
+      </div>
+      <div class="nb-tags">
+        <span class="nb-tag">ICP</span>
+        <span class="nb-tag">SVD</span>
+        <span class="nb-tag">KD-tree</span>
+        <span class="nb-tag">normals</span>
+        <span class="nb-tag">scan matching</span>
+      </div>
+      <div class="nb-prereq">prereq: NB 01, linear algebra (SVD)</div>
+      <div class="nb-links">
+        <a class="nb-colab"
+           href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/slam/02_icp_alignment.ipynb"
+           target="_blank" rel="noopener">
+          &#9654; Open in Colab
+        </a>
+        <a class="nb-github"
+           href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/slam/02_icp_alignment.ipynb"
+           target="_blank" rel="noopener">
+          [ github ]
+        </a>
+      </div>
+    </div>
+
+    <!-- NB 03 -->
+    <div class="nb-card">
+      <div class="nb-num">NB 03 / 03</div>
+      <div class="nb-title">Pose Graph Optimization:<br>Closing the Loop</div>
+      <div class="nb-desc">
+        Build the SLAM back-end from scratch. Construct a pose graph with
+        odometry edges and a loop closure, derive the weighted least-squares
+        cost, implement analytic SE(2) Jacobians, and optimize with L-BFGS-B.
+        See drift corrected across the whole trajectory. Compare to GTSAM / g2o.
+      </div>
+      <div class="nb-tags">
+        <span class="nb-tag">pose graph</span>
+        <span class="nb-tag">loop closure</span>
+        <span class="nb-tag">Gauss-Newton</span>
+        <span class="nb-tag">SE(2)</span>
+        <span class="nb-tag">GTSAM</span>
+      </div>
+      <div class="nb-prereq">prereq: NB 01 + 02, least squares</div>
+      <div class="nb-links">
+        <a class="nb-colab"
+           href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/slam/03_pose_graph_opt.ipynb"
+           target="_blank" rel="noopener">
+          &#9654; Open in Colab
+        </a>
+        <a class="nb-github"
+           href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/slam/03_pose_graph_opt.ipynb"
+           target="_blank" rel="noopener">
+          [ github ]
+        </a>
+      </div>
+    </div>
+
+  </div><!-- .nb-grid -->
+
+  <!-- SLAM pipeline diagram -->
+  <div class="slam-pipeline">
+    <h3>Full SLAM Pipeline — Where Each Notebook Fits</h3>
+    <div class="pipeline-row">
+      <div class="pipeline-box">
+        <div class="pb-label">SENSORS</div>
+        <div class="pb-tech">LiDAR · Camera · IMU</div>
+      </div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-box active">
+        <div class="pb-label">NB 01</div>
+        <div class="pb-tech">EKF / IMU<br>odometry</div>
+      </div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-box active">
+        <div class="pb-label">NB 02</div>
+        <div class="pb-tech">ICP scan<br>matching</div>
+      </div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-box">
+        <div class="pb-label">DETECT</div>
+        <div class="pb-tech">Loop closure<br>recognition</div>
+      </div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-box active">
+        <div class="pb-label">NB 03</div>
+        <div class="pb-tech">Pose graph<br>optimisation</div>
+      </div>
+      <div class="pipeline-arrow">&#8594;</div>
+      <div class="pipeline-box">
+        <div class="pb-label">OUTPUT</div>
+        <div class="pb-tech">Trajectory<br>+ 3-D map</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+<!-- ── END SLAM NOTEBOOKS ──────────────────────────────────────────────── -->
+
+</body>
+</html>
