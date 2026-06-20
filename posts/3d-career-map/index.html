@@ -1618,5 +1618,388 @@ function closeDetail() {
 </section>
 <!-- ── END SLAM NOTEBOOKS ──────────────────────────────────────────────── -->
 
+<!-- ── ALL TRACKS NOTEBOOK SECTIONS ────────────────────────────────────── -->
+<style>
+.tracks-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 32px 0 16px;
+}
+.track-nav-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+.track-nav-btn:hover, .track-nav-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.track-section {
+  margin-top: 24px;
+}
+.track-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-bottom: 28px;
+  line-height: 1.8;
+}
+.track-meta span { color: var(--text); }
+</style>
+
+<section style="padding: 0 0 80px;">
+  <h2 class="section-heading" style="margin-bottom:8px;">All Career Track Notebooks</h2>
+  <p class="section-sub">[ 8 tracks &nbsp;.&nbsp; 1 notebook each &nbsp;.&nbsp; CPU only &nbsp;.&nbsp; free Colab ]</p>
+
+  <div class="tracks-nav">
+    <a class="track-nav-btn" href="#nb-cad">[ CAD ]</a>
+    <a class="track-nav-btn" href="#nb-pc">[ Point Cloud ]</a>
+    <a class="track-nav-btn" href="#nb-nerf">[ NeRF / 3DGS ]</a>
+    <a class="track-nav-btn" href="#nb-fem">[ Simulation ]</a>
+    <a class="track-nav-btn" href="#nb-mocap">[ Mocap ]</a>
+    <a class="track-nav-btn" href="#nb-sdf">[ SDF ]</a>
+    <a class="track-nav-btn" href="#nb-webgl">[ WebGL ]</a>
+    <a class="track-nav-btn" href="#nb-gis">[ GIS ]</a>
+  </div>
+
+  <!-- ── CAD ──────────────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-cad">
+    <h2 class="section-heading">CAD / Parametric Notebooks</h2>
+    <p class="section-sub">[ De Casteljau &nbsp;.&nbsp; Bernstein basis &nbsp;.&nbsp; B-splines &nbsp;.&nbsp; NURBS circle ]</p>
+    <div class="track-meta">
+      <span>Rhino &middot; Grasshopper &middot; FreeCAD &middot; OpenCASCADE</span>
+      &nbsp;|&nbsp; prereq: numpy, basic calculus
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: var(--orange);">
+        <div class="nb-num" style="color:var(--orange);">NB 01 / 01</div>
+        <div class="nb-title">Bezier Curves &amp; NURBS:<br>The Math Behind Every CAD Tool</div>
+        <div class="nb-desc">
+          Build Bezier curves via De Casteljau recursion and Bernstein basis polynomials.
+          Extend to B-splines with the Cox-de Boor recursion, demonstrate local control
+          via knot vectors, then construct a mathematically perfect NURBS circle with
+          rational weights. Every step visualised.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">De Casteljau</span>
+          <span class="nb-tag">Bernstein</span>
+          <span class="nb-tag">B-spline</span>
+          <span class="nb-tag">NURBS</span>
+          <span class="nb-tag">knot vector</span>
+          <span class="nb-tag">convex hull</span>
+        </div>
+        <div class="nb-prereq">prereq: numpy, parametric thinking</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/cad/01_bezier_nurbs.ipynb"
+             target="_blank" rel="noopener" style="background:#D35400; color:#fff;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/cad/01_bezier_nurbs.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── POINT CLOUD ──────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-pc" style="margin-top:60px;">
+    <h2 class="section-heading">Point Cloud Notebooks</h2>
+    <p class="section-sub">[ voxel downsample &nbsp;.&nbsp; PCA normals &nbsp;.&nbsp; RANSAC plane &nbsp;.&nbsp; SOR filter ]</p>
+    <div class="track-meta">
+      <span>Open3D &middot; PCL &middot; CUDA kernels &middot; LiDAR pipelines</span>
+      &nbsp;|&nbsp; prereq: numpy, scipy.spatial
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: var(--teal);">
+        <div class="nb-num" style="color:var(--teal);">NB 01 / 01</div>
+        <div class="nb-title">Point Cloud Fundamentals:<br>Structure, Normals &amp; Spatial Search</div>
+        <div class="nb-desc">
+          Generate a synthetic LiDAR scene (floor + sphere + box), then build the
+          full preprocessing pipeline from scratch: voxel grid downsampling,
+          PCA-based normal estimation with KD-tree, Statistical Outlier Removal,
+          and RANSAC ground-plane segmentation.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">voxel grid</span>
+          <span class="nb-tag">PCA normals</span>
+          <span class="nb-tag">KD-tree</span>
+          <span class="nb-tag">SOR filter</span>
+          <span class="nb-tag">RANSAC</span>
+          <span class="nb-tag">segmentation</span>
+        </div>
+        <div class="nb-prereq">prereq: numpy, scipy.spatial.KDTree</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/point-cloud/01_point_cloud_fundamentals.ipynb"
+             target="_blank" rel="noopener" style="background:var(--teal); color:#fff;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/point-cloud/01_point_cloud_fundamentals.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── NERF / 3DGS ──────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-nerf" style="margin-top:60px;">
+    <h2 class="section-heading">NeRF / 3D Gaussian Splatting Notebooks</h2>
+    <p class="section-sub">[ volume rendering &nbsp;.&nbsp; transmittance &nbsp;.&nbsp; importance sampling &nbsp;.&nbsp; 2D neural field ]</p>
+    <div class="track-meta">
+      <span>PyTorch &middot; nerfstudio &middot; 3DGS &middot; COLMAP &middot; CUDA</span>
+      &nbsp;|&nbsp; prereq: calculus, numpy
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: var(--purple);">
+        <div class="nb-num" style="color:var(--purple);">NB 01 / 01</div>
+        <div class="nb-title">Volume Rendering:<br>The Math That Makes NeRF Work</div>
+        <div class="nb-desc">
+          Derive and implement the emission-absorption volume rendering integral.
+          Visualise transmittance and weight functions for different density profiles.
+          Implement stratified and importance sampling. Build a tiny 2D neural field
+          with manual backprop that overfits to a concentric-ring target image.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">volume rendering</span>
+          <span class="nb-tag">transmittance</span>
+          <span class="nb-tag">importance sampling</span>
+          <span class="nb-tag">positional encoding</span>
+          <span class="nb-tag">neural field</span>
+          <span class="nb-tag">MLP</span>
+        </div>
+        <div class="nb-prereq">prereq: calculus (integrals), numpy, chain rule</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/nerf-3dgs/01_volume_rendering.ipynb"
+             target="_blank" rel="noopener" style="background:var(--purple); color:#fff;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/nerf-3dgs/01_volume_rendering.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FEM / SIM ─────────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-fem" style="margin-top:60px;">
+    <h2 class="section-heading">Simulation / FEM Notebooks</h2>
+    <p class="section-sub">[ Euler integration &nbsp;.&nbsp; mass-spring cloth &nbsp;.&nbsp; PBD &nbsp;.&nbsp; XPBD compliance ]</p>
+    <div class="track-meta">
+      <span>Houdini Vellum &middot; Unity Cloth &middot; Bullet &middot; XPBD &middot; PhysX</span>
+      &nbsp;|&nbsp; prereq: numpy, basic physics
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: var(--red);">
+        <div class="nb-num" style="color:var(--red);">NB 01 / 01</div>
+        <div class="nb-title">Mass-Spring &amp; PBD:<br>Cloth and Soft Bodies from Scratch</div>
+        <div class="nb-desc">
+          Compare explicit Euler vs symplectic Euler on a pendulum. Build a
+          mass-spring cloth grid (structural + shear + bending springs). Implement
+          Position-Based Dynamics (PBD) for unconditional stability. Extend to XPBD
+          with physical compliance units and timestep-independent stiffness.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">Euler integration</span>
+          <span class="nb-tag">mass-spring</span>
+          <span class="nb-tag">PBD</span>
+          <span class="nb-tag">XPBD</span>
+          <span class="nb-tag">constraints</span>
+          <span class="nb-tag">cloth sim</span>
+        </div>
+        <div class="nb-prereq">prereq: numpy, Newton's 2nd law</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/fem-sim/01_mass_spring_pbd.ipynb"
+             target="_blank" rel="noopener" style="background:var(--red); color:#fff;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/fem-sim/01_mass_spring_pbd.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MOCAP ─────────────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-mocap" style="margin-top:60px;">
+    <h2 class="section-heading">Motion Capture Notebooks</h2>
+    <p class="section-sub">[ skeleton FK &nbsp;.&nbsp; quaternion slerp &nbsp;.&nbsp; FABRIK IK &nbsp;.&nbsp; BVH format ]</p>
+    <div class="track-meta">
+      <span>Vicon &middot; OptiTrack &middot; MotionBuilder &middot; Unity IK &middot; BVH</span>
+      &nbsp;|&nbsp; prereq: numpy, 3D transforms
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: var(--green);">
+        <div class="nb-num" style="color:var(--green);">NB 01 / 01</div>
+        <div class="nb-title">BVH &amp; Kinematics:<br>Skeleton Animation from Scratch</div>
+        <div class="nb-desc">
+          Define a 17-joint biped skeleton. Implement forward kinematics as a tree
+          traversal using 4x4 homogeneous matrices. Animate a 4-frame walk cycle.
+          Implement quaternion slerp and demonstrate its superiority over Euler angle
+          lerp. Build FABRIK inverse kinematics to reach arbitrary targets.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">forward kinematics</span>
+          <span class="nb-tag">quaternion</span>
+          <span class="nb-tag">slerp</span>
+          <span class="nb-tag">FABRIK IK</span>
+          <span class="nb-tag">gimbal lock</span>
+          <span class="nb-tag">BVH</span>
+        </div>
+        <div class="nb-prereq">prereq: numpy, rotation matrices, homogeneous coords</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/mocap/01_bvh_and_kinematics.ipynb"
+             target="_blank" rel="noopener" style="background:var(--green); color:#fff;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/mocap/01_bvh_and_kinematics.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SDF ───────────────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-sdf" style="margin-top:60px;">
+    <h2 class="section-heading">SDF / Geometry Notebooks</h2>
+    <p class="section-sub">[ primitives &nbsp;.&nbsp; CSG boolean ops &nbsp;.&nbsp; smooth union &nbsp;.&nbsp; marching cubes ]</p>
+    <div class="track-meta">
+      <span>OpenVDB &middot; libigl &middot; CGAL &middot; Shadertoy &middot; Blender geometry nodes</span>
+      &nbsp;|&nbsp; prereq: numpy, level sets
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: #6C3483;">
+        <div class="nb-num" style="color:#6C3483;">NB 01 / 01</div>
+        <div class="nb-title">Signed Distance Fields:<br>Implicit Geometry &amp; Marching Cubes</div>
+        <div class="nb-desc">
+          Build all primitive SDFs (circle, box, capsule, torus) and visualise their
+          level sets. Implement CSG Boolean operations as min/max, including Inigo
+          Quilez's polynomial smooth union. Prove the eikonal property numerically.
+          Extract a triangle mesh from a 3D SDF grid with a minimal marching cubes.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">SDF primitives</span>
+          <span class="nb-tag">CSG</span>
+          <span class="nb-tag">smooth union</span>
+          <span class="nb-tag">eikonal</span>
+          <span class="nb-tag">marching cubes</span>
+          <span class="nb-tag">level set</span>
+        </div>
+        <div class="nb-prereq">prereq: numpy, implicit functions, gradient</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/sdf-geometry/01_sdf_ops_marching_cubes.ipynb"
+             target="_blank" rel="noopener" style="background:#6C3483; color:#fff;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/sdf-geometry/01_sdf_ops_marching_cubes.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WEBGL ─────────────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-webgl" style="margin-top:60px;">
+    <h2 class="section-heading">WebGL / Three.js Notebooks</h2>
+    <p class="section-sub">[ MVP pipeline &nbsp;.&nbsp; LookAt &nbsp;.&nbsp; perspective projection &nbsp;.&nbsp; rasterizer ]</p>
+    <div class="track-meta">
+      <span>Three.js &middot; WebGPU &middot; GLSL shaders &middot; React Three Fiber</span>
+      &nbsp;|&nbsp; prereq: numpy, linear algebra
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: #0E7C7B;">
+        <div class="nb-num" style="color:#0E7C7B;">NB 01 / 01</div>
+        <div class="nb-title">Graphics Math:<br>Transforms, Projection &amp; Rasterizer</div>
+        <div class="nb-desc">
+          Build the full MVP pipeline in numpy: T*R*S model matrix, LookAt view
+          matrix, perspective and orthographic projection. Demonstrate FOV effects
+          and non-linear depth buffer precision. Implement a software rasterizer
+          with per-pixel barycentric interpolation of vertex colours.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">model matrix</span>
+          <span class="nb-tag">view matrix</span>
+          <span class="nb-tag">perspective</span>
+          <span class="nb-tag">depth buffer</span>
+          <span class="nb-tag">barycentric</span>
+          <span class="nb-tag">rasterizer</span>
+        </div>
+        <div class="nb-prereq">prereq: numpy, matrix multiplication, 3D transforms</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/webgl/01_graphics_math.ipynb"
+             target="_blank" rel="noopener" style="background:#0E7C7B; color:#fff;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/webgl/01_graphics_math.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── GIS ───────────────────────────────────────────────────────────── -->
+  <div class="track-section" id="nb-gis" style="margin-top:60px;">
+    <h2 class="section-heading">GIS / Spatial Notebooks</h2>
+    <p class="section-sub">[ WGS84 &nbsp;.&nbsp; Mercator projection &nbsp;.&nbsp; great-circle distance &nbsp;.&nbsp; quadtree &nbsp;.&nbsp; XYZ tiles ]</p>
+    <div class="track-meta">
+      <span>PostGIS &middot; QGIS &middot; GeoPandas &middot; Leaflet &middot; Mapbox &middot; Cesium</span>
+      &nbsp;|&nbsp; prereq: numpy, trigonometry
+    </div>
+    <div class="nb-grid">
+      <div class="nb-card" style="border-top-color: var(--gold);">
+        <div class="nb-num" style="color:var(--gold);">NB 01 / 01</div>
+        <div class="nb-title">Spatial Fundamentals:<br>Coordinates, Projections &amp; Indexing</div>
+        <div class="nb-desc">
+          Convert GPS lat/lon to 3D ECEF using the WGS84 ellipsoid. Implement
+          the Mercator projection and visualise its area distortion via Tissot's
+          indicatrix. Compute great-circle distances with Haversine and plot
+          curved routes. Build a quadtree spatial index and benchmark it vs brute
+          force. Derive and visualise the XYZ slippy-map tile scheme.
+        </div>
+        <div class="nb-tags">
+          <span class="nb-tag">WGS84</span>
+          <span class="nb-tag">ECEF</span>
+          <span class="nb-tag">Mercator</span>
+          <span class="nb-tag">Haversine</span>
+          <span class="nb-tag">quadtree</span>
+          <span class="nb-tag">slippy tiles</span>
+        </div>
+        <div class="nb-prereq">prereq: numpy, spherical trig</div>
+        <div class="nb-links">
+          <a class="nb-colab"
+             href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/gis/01_spatial_fundamentals.ipynb"
+             target="_blank" rel="noopener" style="background:var(--gold); color:#000;">
+            &#9654; Open in Colab
+          </a>
+          <a class="nb-github"
+             href="https://github.com/ChenChihYuan/geo-instructor/blob/main/posts/3d-career-map/notebooks/gis/01_spatial_fundamentals.ipynb"
+             target="_blank" rel="noopener">[ github ]</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+<!-- ── END ALL TRACK NOTEBOOKS ──────────────────────────────────────────── -->
+
 </body>
 </html>
