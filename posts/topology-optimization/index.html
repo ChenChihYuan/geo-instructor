@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Bone Algorithm -- Topology Optimization from Zero</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    .scene-box { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin:32px 0; overflow:hidden; }
+    .scene-box canvas { width:100%; display:block; }
+    .scene-caption { padding:14px 24px; font-size:0.82rem; color:var(--text-muted); font-style:italic; border-top:1px solid var(--border); }
+    .scene-controls { display:flex; gap:10px; align-items:center; justify-content:center; padding:14px 24px; border-top:1px solid var(--border); flex-wrap:wrap; }
+    .scene-controls label { font-size:0.78rem; color:var(--text-muted); font-family:var(--font-mono); }
+
+    .concept-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+    .concept-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+    .concept-card h4 { color:var(--text); margin-bottom:8px; font-size:0.95rem; }
+    .concept-card p  { font-size:0.85rem; color:var(--text-muted); margin:0; }
+    .concept-card .icon { font-size:1.8rem; margin-bottom:10px; }
+    @media(max-width:600px){ .concept-grid{grid-template-columns:1fr;} }
+
+    .timeline { position:relative; padding-left:36px; margin:24px 0; }
+    .timeline::before { content:''; position:absolute; left:12px; top:0; bottom:0; width:2px; background:var(--border); }
+    .timeline-item { position:relative; margin-bottom:24px; }
+    .timeline-item::before { content:''; position:absolute; left:-30px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--accent); border:2px solid var(--bg); }
+    .timeline-item h4 { color:var(--text); margin-bottom:4px; font-size:0.95rem; }
+    .timeline-item p  { color:var(--text-muted); font-size:0.85rem; margin:0; }
+    .timeline-item .year { color:var(--accent); font-family:var(--font-mono); font-size:0.78rem; }
+
+    .arch-card { display:flex; gap:18px; align-items:flex-start; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:22px; margin:14px 0; }
+    .arch-card .num { flex-shrink:0; width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:linear-gradient(135deg,var(--accent),#C0392B); font-weight:700; color:#fff; font-size:0.9rem; }
+    .arch-card .body h4 { color:var(--text); margin-bottom:5px; }
+    .arch-card .body p  { color:var(--text-muted); font-size:0.85rem; margin:0; }
+
+    .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:24px 0; }
+    .stat-box  { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; text-align:center; }
+    .stat-box .val   { font-size:1.8rem; font-weight:800; color:var(--accent); font-family:var(--font-mono); }
+    .stat-box .label { font-size:0.72rem; color:var(--text-muted); margin-top:4px; }
+    @media(max-width:600px){ .stats-row{grid-template-columns:1fr;} }
+
+    .equation { background:var(--bg-card); border-left:3px solid var(--accent); padding:16px 22px; margin:20px 0; border-radius:0 var(--radius) var(--radius) 0; font-family:var(--font-mono); font-size:0.9rem; color:var(--text); }
+    .equation .eq-label { color:var(--text-muted); font-size:0.72rem; margin-bottom:6px; font-family:var(--font-pixel); }
+
+    .comparison { display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin:24px 0; }
+    .comparison .col { padding:20px; }
+    .comparison .col:first-child { border-right:1px solid var(--border); }
+    .comparison .col h4 { font-size:0.85rem; margin-bottom:10px; color:var(--accent); font-family:var(--font-mono); }
+    .comparison .col ul { list-style:none; font-size:0.85rem; color:var(--text-muted); }
+    .comparison .col ul li { padding:3px 0; }
+    .comparison .col ul li::before { content:"+ "; color:#2D6A4F; }
+    .comparison .col:last-child ul li::before { content:"- "; color:#C0392B; }
+
+    .nb-colab { display:inline-flex; align-items:center; gap:8px; background:var(--accent); color:#fff; padding:10px 20px; border-radius:var(--radius); font-family:var(--font-mono); font-size:0.82rem; text-decoration:none; margin:8px 4px; }
+    .nb-colab:hover { opacity:0.85; }
+
+    .toc { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px 28px; margin:32px 0; }
+    .toc h3 { font-size:0.72rem; font-family:var(--font-pixel); color:var(--text-muted); margin-bottom:14px; letter-spacing:0.1em; }
+    .toc ol  { padding-left:20px; }
+    .toc li  { font-size:0.88rem; margin:6px 0; }
+    .toc a   { color:var(--accent); text-decoration:none; }
+    .toc a:hover { text-decoration:underline; }
+
+    .visual { margin:28px 0; text-align:center; }
+    .visual svg { max-width:100%; }
+    .visual .caption { font-size:0.78rem; color:var(--text-muted); margin-top:10px; font-style:italic; }
+
+    .hero-canvas-wrap { height:220px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin:24px 0; overflow:hidden; }
+    .hero-canvas-wrap canvas { width:100%; height:100%; display:block; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="site-nav">
+    <a href="../../index.html" class="logo">GEO-INSTRUCTOR</a>
+    <div class="nav-links">
+      <a href="../../index.html">[ WORK ]</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <h1>The Bone Algorithm</h1>
+    <p class="subtitle">
+      Topology Optimization from zero -- how engineers teach software to grow structure
+      the same way bone does. A hands-on guide to SIMP and the 99-line algorithm.
+    </p>
+    <p class="meta pixel-label">JUNE 2026 &nbsp;&#183;&nbsp; 22 min read</p>
+    <div class="tags">
+      <span class="tag">FEM</span>
+      <span class="tag">Structural Optimization</span>
+      <span class="tag">SIMP</span>
+      <span class="tag">CAD</span>
+      <span class="tag">Simulation</span>
+    </div>
+  </header>
+
+  <!-- hero: live SIMP running as the page loads -->
+  <div class="hero-canvas-wrap">
+    <canvas id="heroCanvas"></canvas>
+  </div>
+
+  <!-- TOC -->
+  <nav class="toc">
+    <h3>CONTENTS</h3>
+    <ol>
+      <li><a href="#s1">Nature already solved this</a></li>
+      <li><a href="#s2">What topology optimization actually is</a></li>
+      <li><a href="#s3">The finite element foundation</a></li>
+      <li><a href="#s4">SIMP -- density as a dial</a></li>
+      <li><a href="#s5">Sensitivity: where does stiffness care about material?</a></li>
+      <li><a href="#s6">The density filter -- smoothing away checkerboard</a></li>
+      <li><a href="#s7">Optimality Criteria -- a fast update rule</a></li>
+      <li><a href="#s8">Interactive SIMP demo</a></li>
+      <li><a href="#s9">Real systems: from research to industry</a></li>
+      <li><a href="#s10">Historical context</a></li>
+      <li><a href="#s11">Hands-on Colab notebook</a></li>
+    </ol>
+  </nav>
+
+<!-- ====== SECTIONS 1-4 ====== -->
+<article>
+<section id="s1">
+  <h2>1. Nature already solved this</h2>
+  <p>
+    Bone is one of the most efficient structures in the natural world.
+    A femur cross-section looks chaotic at first glance -- a lattice of
+    fine struts called trabeculae, packed more densely near the outer shell,
+    sparse in the middle. That is not randomness. It is millions of years of
+    material placed exactly where force flows.
+  </p>
+  <div class="visual">
+    <svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg" style="max-width:580px;">
+      <!-- left: solid block -->
+      <rect x="10" y="20" width="160" height="160" fill="#EDEAE7" stroke="#D4D0CC" stroke-width="1.5"/>
+      <text x="90" y="196" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">naive: uniform solid</text>
+      <text x="90" y="108" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">100% material</text>
+
+      <!-- arrow -->
+      <text x="205" y="112" font-family="Inter,sans-serif" font-size="22" fill="#1A1AE5">-&gt;</text>
+
+      <!-- right: trabecular-like lattice -->
+      <rect x="240" y="20" width="160" height="160" fill="#F4F2F0" stroke="#D4D0CC" stroke-width="1.5"/>
+      <!-- dense outer shell struts -->
+      <rect x="240" y="20" width="8" height="160" fill="#2A2622" opacity="0.85"/>
+      <rect x="392" y="20" width="8" height="160" fill="#2A2622" opacity="0.85"/>
+      <rect x="240" y="20" width="160" height="8" fill="#2A2622" opacity="0.85"/>
+      <rect x="240" y="172" width="160" height="8" fill="#2A2622" opacity="0.85"/>
+      <!-- inner diagonals (load paths) -->
+      <line x1="248" y1="28" x2="392" y2="172" stroke="#2A2622" stroke-width="5" opacity="0.6"/>
+      <line x1="392" y1="28" x2="248" y2="172" stroke="#2A2622" stroke-width="5" opacity="0.6"/>
+      <line x1="320" y1="28" x2="320" y2="172" stroke="#2A2622" stroke-width="3" opacity="0.4"/>
+      <line x1="248" y1="100" x2="392" y2="100" stroke="#2A2622" stroke-width="3" opacity="0.4"/>
+      <text x="320" y="196" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">optimized: 40% material</text>
+
+      <!-- compliance label -->
+      <text x="320" y="215" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#1A1AE5">same stiffness, 60% less material</text>
+
+      <!-- force arrow -->
+      <line x1="490" y1="80" x2="490" y2="140" stroke="#C0392B" stroke-width="2" marker-end="url(#arr)"/>
+      <text x="510" y="115" font-family="Inter,sans-serif" font-size="11" fill="#C0392B">F</text>
+      <!-- support hatch left -->
+      <line x1="420" y1="20" x2="420" y2="180" stroke="#8A857E" stroke-width="1.5"/>
+      <line x1="420" y1="30"  x2="435" y2="20"  stroke="#8A857E" stroke-width="1"/>
+      <line x1="420" y1="55"  x2="435" y2="45"  stroke="#8A857E" stroke-width="1"/>
+      <line x1="420" y1="80"  x2="435" y2="70"  stroke="#8A857E" stroke-width="1"/>
+      <line x1="420" y1="105" x2="435" y2="95"  stroke="#8A857E" stroke-width="1"/>
+      <line x1="420" y1="130" x2="435" y2="120" stroke="#8A857E" stroke-width="1"/>
+      <line x1="420" y1="155" x2="435" y2="145" stroke="#8A857E" stroke-width="1"/>
+      <line x1="420" y1="180" x2="435" y2="170" stroke="#8A857E" stroke-width="1"/>
+      <text x="455" y="108" font-family="Inter,sans-serif" font-size="11" fill="#8A857E">fixed</text>
+      <defs>
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#C0392B"/>
+        </marker>
+      </defs>
+    </svg>
+    <div class="caption">Topology optimization removes material from where it does not carry load, mimicking how bone adapts to stress.</div>
+  </div>
+  <p>
+    This is the core idea of <strong>topology optimization</strong>: given a fixed region of space, a set of
+    forces, and a material budget, find the distribution of material that makes the structure
+    as stiff as possible. The algorithm grows structure the way bone does -- by killing off
+    underloaded material and reinforcing the rest.
+  </p>
+</section>
+
+<section id="s2">
+  <h2>2. What topology optimization actually is</h2>
+  <p>
+    There are three levels of structural optimization. They are often confused:
+  </p>
+  <div class="concept-grid">
+    <div class="concept-card">
+      <div class="icon">&#8596;</div>
+      <h4>Size optimization</h4>
+      <p>Shape is fixed. Tune numbers: beam thickness, spring constant, plate gauge.
+         The design space is a handful of parameters.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">&#9651;</div>
+      <h4>Shape optimization</h4>
+      <p>Topology is fixed. Move boundary curves to smooth stress concentrations.
+         Think filleting a corner. Adds thousands of parameters (node positions).</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">&#11042;</div>
+      <h4>Topology optimization</h4>
+      <p>Nothing fixed. The algorithm decides where material exists at all --
+         holes can appear, branches can merge, arches can form from a blank canvas.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">&#129520;</div>
+      <h4>Generative design</h4>
+      <p>Industry marketing term for topology optimization + multiple load cases +
+         manufacturing constraints. Same math, fancier UI (Fusion 360, nTopology).</p>
+    </div>
+  </div>
+  <p>
+    Topology optimization is the hardest and most powerful level. The design space is
+    <em>every possible hole pattern</em> inside a domain -- combinatorially infinite.
+    The algorithm we will build, called SIMP, sidesteps the combinatorics with a
+    continuous relaxation trick.
+  </p>
+
+  <div class="callout insight">
+    <div class="callout-title pixel-label">THE PROBLEM</div>
+    <p>Maximize stiffness of a structure subject to: (1) force equilibrium (FEA), (2) a material budget (volume fraction). Control variable: which cells contain material.</p>
+  </div>
+</section>
+
+<section id="s3">
+  <h2>3. The finite element foundation</h2>
+  <p>
+    Before we can optimize, we need to <em>measure</em> stiffness. That is what finite
+    element analysis (FEA) does: it discretizes the domain into small cells, assembles a
+    global stiffness matrix, and solves for displacements under the applied loads.
+  </p>
+
+  <!-- FEA mesh SVG -->
+  <div class="visual">
+    <svg viewBox="0 0 540 200" xmlns="http://www.w3.org/2000/svg" style="max-width:540px;">
+      <!-- mesh grid 6x3 -->
+      <g id="mesh" opacity="0.9">
+        <!-- fill elements -->
+        <rect x="30" y="30" width="70" height="60" fill="#EDEAE7" stroke="#D4D0CC" stroke-width="1"/>
+        <rect x="100" y="30" width="70" height="60" fill="#EDEAE7" stroke="#D4D0CC" stroke-width="1"/>
+        <rect x="170" y="30" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.25"/>
+        <rect x="240" y="30" width="70" height="60" fill="#EDEAE7" stroke="#D4D0CC" stroke-width="1"/>
+        <rect x="310" y="30" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.55"/>
+        <rect x="380" y="30" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.85"/>
+        <rect x="30" y="90" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.75"/>
+        <rect x="100" y="90" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.45"/>
+        <rect x="170" y="90" width="70" height="60" fill="#EDEAE7" stroke="#D4D0CC" stroke-width="1"/>
+        <rect x="240" y="90" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.65"/>
+        <rect x="310" y="90" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.90"/>
+        <rect x="380" y="90" width="70" height="60" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.80"/>
+        <rect x="30" y="150" width="70" height="50" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.90"/>
+        <rect x="100" y="150" width="70" height="50" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.70"/>
+        <rect x="170" y="150" width="70" height="50" fill="#EDEAE7" stroke="#D4D0CC" stroke-width="1"/>
+        <rect x="240" y="150" width="70" height="50" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.50"/>
+        <rect x="310" y="150" width="70" height="50" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.85"/>
+        <rect x="380" y="150" width="70" height="50" fill="#1A1AE5" stroke="#D4D0CC" stroke-width="1" opacity="0.95"/>
+      </g>
+      <!-- node dots -->
+      <g fill="#2A2622">
+        <circle cx="30"  cy="30"  r="3"/><circle cx="100" cy="30"  r="3"/><circle cx="170" cy="30"  r="3"/>
+        <circle cx="240" cy="30"  r="3"/><circle cx="310" cy="30"  r="3"/><circle cx="380" cy="30"  r="3"/>
+        <circle cx="450" cy="30"  r="3"/>
+        <circle cx="30"  cy="90"  r="3"/><circle cx="100" cy="90"  r="3"/><circle cx="170" cy="90"  r="3"/>
+        <circle cx="240" cy="90"  r="3"/><circle cx="310" cy="90"  r="3"/><circle cx="380" cy="90"  r="3"/>
+        <circle cx="450" cy="90"  r="3"/>
+        <circle cx="30"  cy="150" r="3"/><circle cx="100" cy="150" r="3"/><circle cx="170" cy="150" r="3"/>
+        <circle cx="240" cy="150" r="3"/><circle cx="310" cy="150" r="3"/><circle cx="380" cy="150" r="3"/>
+        <circle cx="450" cy="150" r="3"/>
+        <circle cx="30"  cy="200" r="3"/><circle cx="100" cy="200" r="3"/><circle cx="170" cy="200" r="3"/>
+        <circle cx="240" cy="200" r="3"/><circle cx="310" cy="200" r="3"/><circle cx="380" cy="200" r="3"/>
+        <circle cx="450" cy="200" r="3"/>
+      </g>
+      <!-- support hatch left -->
+      <line x1="25" y1="30" x2="25" y2="200" stroke="#8A857E" stroke-width="2"/>
+      <line x1="25" y1="45"  x2="12" y2="55"  stroke="#8A857E"/>
+      <line x1="25" y1="75"  x2="12" y2="85"  stroke="#8A857E"/>
+      <line x1="25" y1="105" x2="12" y2="115" stroke="#8A857E"/>
+      <line x1="25" y1="135" x2="12" y2="145" stroke="#8A857E"/>
+      <line x1="25" y1="165" x2="12" y2="175" stroke="#8A857E"/>
+      <line x1="25" y1="195" x2="12" y2="200" stroke="#8A857E"/>
+      <!-- load arrow mid-right -->
+      <line x1="455" y1="100" x2="455" y2="155" stroke="#C0392B" stroke-width="2.5" marker-end="url(#arr2)"/>
+      <text x="465" y="135" font-family="Inter,sans-serif" font-size="11" fill="#C0392B">F</text>
+      <defs>
+        <marker id="arr2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#C0392B"/>
+        </marker>
+      </defs>
+      <!-- density label -->
+      <text x="205" y="218" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#1A1AE5">blue intensity = element density (0 to 1)</text>
+    </svg>
+    <div class="caption">Each cell in the FE mesh carries a density rho between 0 (void) and 1 (solid). FEA solves for displacements at every node given those densities.</div>
+  </div>
+
+  <p>
+    Each element contributes to the global stiffness matrix K proportionally to how
+    much material it contains. The system to solve is simply:
+  </p>
+  <div class="equation">
+    <div class="eq-label">EQUILIBRIUM</div>
+    K(x) u = F
+  </div>
+  <p>
+    where <strong>x</strong> is the vector of element densities, <strong>u</strong> is displacement,
+    and <strong>F</strong> is the applied load. Compliance (the inverse of stiffness -- lower is stiffer)
+    is then:
+  </p>
+  <div class="equation">
+    <div class="eq-label">COMPLIANCE (OBJECTIVE)</div>
+    C(x) = F^T u = u^T K(x) u
+  </div>
+  <p>
+    We want to <em>minimize C</em> subject to the volume constraint. That is the whole
+    optimization problem in two lines of math.
+  </p>
+</section>
+
+<section id="s4">
+  <h2>4. SIMP -- density as a dial</h2>
+  <p>
+    The real design space is binary: each cell is either solid (1) or void (0).
+    Searching that space directly is NP-hard for any reasonable mesh. The SIMP trick
+    (Solid Isotropic Material with Penalization) relaxes the problem: allow densities
+    to be <em>continuous</em> between 0 and 1, but penalize the grey zone.
+  </p>
+  <div class="equation">
+    <div class="eq-label">SIMP MATERIAL MODEL</div>
+    E(rho) = E_min + rho^p * (E_0 - E_min) ,  p = 3
+  </div>
+  <p>
+    The exponent <code>p = 3</code> is the key. At rho = 0.5, the element only contributes
+    0.5^3 = 12.5% of full stiffness, but costs 50% of the material budget. The
+    optimizer learns that grey cells are expensive for little structural gain -- so it
+    pushes densities toward 0 or 1 on its own.
+  </p>
+
+  <!-- SIMP curve SVG -->
+  <div class="visual">
+    <svg viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg" style="max-width:400px;">
+      <rect x="50" y="10" width="300" height="180" fill="#F4F2F0" stroke="#D4D0CC" stroke-width="1"/>
+      <!-- grid -->
+      <line x1="50" y1="100" x2="350" y2="100" stroke="#EDEAE7" stroke-width="1"/>
+      <line x1="50" y1="55"  x2="350" y2="55"  stroke="#EDEAE7" stroke-width="1"/>
+      <line x1="50" y1="145" x2="350" y2="145" stroke="#EDEAE7" stroke-width="1"/>
+      <line x1="200" y1="10"  x2="200" y2="190" stroke="#EDEAE7" stroke-width="1"/>
+      <!-- linear p=1 (dashed) -->
+      <line x1="50" y1="190" x2="350" y2="10" stroke="#8A857E" stroke-width="1.5" stroke-dasharray="5,4"/>
+      <!-- SIMP p=3 curve (polyline approx) -->
+      <polyline
+        points="50,190 80,188 110,184 140,175 170,161 200,145 230,124 260,100 290,72 320,41 350,10"
+        fill="none" stroke="#1A1AE5" stroke-width="2.5"/>
+      <!-- axes -->
+      <line x1="50" y1="190" x2="350" y2="190" stroke="#2A2622" stroke-width="1.5"/>
+      <line x1="50" y1="10"  x2="50" y2="190"  stroke="#2A2622" stroke-width="1.5"/>
+      <!-- labels -->
+      <text x="190" y="207" font-family="Inter,sans-serif" font-size="11" fill="#2A2622">rho (density)</text>
+      <text x="50" y="207" font-family="Inter,sans-serif" font-size="10" fill="#8A857E">0</text>
+      <text x="340" y="207" font-family="Inter,sans-serif" font-size="10" fill="#8A857E">1</text>
+      <text x="10" y="15" font-family="Inter,sans-serif" font-size="10" fill="#2A2622" writing-mode="tb">E(rho)</text>
+      <!-- legend -->
+      <line x1="180" y1="50" x2="205" y2="50" stroke="#8A857E" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="210" y="54" font-family="Inter,sans-serif" font-size="10" fill="#8A857E">p=1 (no penalty)</text>
+      <line x1="180" y1="68" x2="205" y2="68" stroke="#1A1AE5" stroke-width="2.5"/>
+      <text x="210" y="72" font-family="Inter,sans-serif" font-size="10" fill="#1A1AE5">p=3 (SIMP)</text>
+      <!-- annotation at rho=0.5 -->
+      <line x1="200" y1="145" x2="200" y2="190" stroke="#C0392B" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="50" y1="145" x2="200" y2="145" stroke="#C0392B" stroke-width="1" stroke-dasharray="3,3"/>
+      <circle cx="200" cy="145" r="4" fill="#C0392B"/>
+      <text x="205" y="140" font-family="Inter,sans-serif" font-size="10" fill="#C0392B">12.5% stiffness</text>
+      <text x="205" y="152" font-family="Inter,sans-serif" font-size="10" fill="#C0392B">at rho=0.5</text>
+    </svg>
+    <div class="caption">The p=3 exponent creates a strong penalty for intermediate densities. Grey cells get little stiffness for their material cost, so the optimizer eliminates them.</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="val">p=3</div>
+      <div class="label">standard SIMP exponent</div>
+    </div>
+    <div class="stat-box">
+      <div class="val">12.5%</div>
+      <div class="label">stiffness at rho=0.5</div>
+    </div>
+    <div class="stat-box">
+      <div class="val">~50</div>
+      <div class="label">iterations to converge</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====== SECTIONS 5-8 ====== -->
+<section id="s5">
+  <h2>5. Sensitivity: where does stiffness care about material?</h2>
+  <p>
+    To minimize compliance we need its gradient with respect to each element density:
+    "if I add a tiny bit of material to element e, how much does compliance change?"
+    This is the <em>sensitivity</em>, and it has a beautiful closed form.
+  </p>
+  <div class="equation">
+    <div class="eq-label">COMPLIANCE SENSITIVITY (chain rule)</div>
+    dC/dxe = -p * xe^(p-1) * (E_0 - E_min) * ue^T * KE * ue
+  </div>
+  <p>
+    Read this as: the sensitivity is large where the element's local strain energy
+    <code>ue^T KE ue</code> is large. High strain energy = this element is working hard.
+    We want MORE material where elements work hard, and less where they are idle.
+  </p>
+  <div class="callout insight">
+    <div class="callout-title pixel-label">KEY INSIGHT</div>
+    <p>You only need the displacement field u (from one FEA solve) to compute the sensitivity for ALL elements simultaneously. One solve per iteration, not one per element.</p>
+  </div>
+  <div class="arch-card">
+    <div class="num">1</div>
+    <div class="body"><h4>Assemble K(x)</h4><p>Build global stiffness from current densities using SIMP material model.</p></div>
+  </div>
+  <div class="arch-card">
+    <div class="num">2</div>
+    <div class="body"><h4>Solve K u = F</h4><p>One linear system solve. Direct (numpy) for small meshes; conjugate gradient for large.</p></div>
+  </div>
+  <div class="arch-card">
+    <div class="num">3</div>
+    <div class="body"><h4>Compute sensitivities</h4><p>Loop all elements: extract ue, compute ue^T KE ue. Multiply by penalized exponent.</p></div>
+  </div>
+  <div class="arch-card">
+    <div class="num">4</div>
+    <div class="body"><h4>Filter sensitivities</h4><p>Average each sensitivity with neighbors using cone-shaped weight. Removes checkerboard.</p></div>
+  </div>
+  <div class="arch-card">
+    <div class="num">5</div>
+    <div class="body"><h4>Update densities (OC)</h4><p>Bisect on Lagrange multiplier to satisfy volume constraint. Multiplicative update per element.</p></div>
+  </div>
+</section>
+
+<section id="s6">
+  <h2>6. The density filter -- smoothing away checkerboard</h2>
+  <p>
+    Without regularization, SIMP produces a checkerboard: alternating solid and void
+    cells that is stiff on paper but completely unprintable. The fix: replace each
+    sensitivity with a weighted average of its neighbors.
+  </p>
+  <div class="equation">
+    <div class="eq-label">SENSITIVITY FILTER</div>
+    dc_hat_e = (1/(x_e * sum_f H_ef)) * sum_f H_ef * x_f * dc_f<br>
+    H_ef = max(0, R_min - dist(e,f))
+  </div>
+  <p>
+    R_min (filter radius) controls minimum feature size. Larger R_min = smoother result
+    with thicker members. Typical values: 1.5 to 2.5 element lengths.
+  </p>
+</section>
+
+<section id="s7">
+  <h2>7. Optimality Criteria -- a fast update rule</h2>
+  <p>
+    The <strong>Optimality Criteria (OC)</strong> method exploits the KKT structure of
+    the volume-constrained problem. Instead of gradient descent, it uses a multiplicative
+    update anchored by a Lagrange multiplier found via bisection.
+  </p>
+  <div class="equation">
+    <div class="eq-label">OC DENSITY UPDATE</div>
+    x_new_e = clip( x_e * sqrt(-dc_e / (lambda * dV_e)),  x_e-move,  x_e+move )
+  </div>
+  <p>
+    Lambda enforces the volume budget. The <code>move</code> limit (typically 0.2)
+    prevents any element from changing too fast. OC converges in 30-80 iterations
+    while gradient descent takes 200+.
+  </p>
+  <div class="callout insight">
+    <div class="callout-title pixel-label">WHY OC BEATS GRADIENT DESCENT</div>
+    <p>OC is multiplicative -- it naturally moves low-density elements slowly and high-density elements faster. It automatically satisfies the volume constraint via bisection instead of requiring a penalty term.</p>
+  </div>
+</section>
+
+<section id="s8">
+  <h2>8. Interactive SIMP demo</h2>
+  <p>
+    Live SIMP solver in JavaScript. The cantilever is fixed left, loaded mid-right.
+    Watch it carve an arch structure over ~50 iterations.
+  </p>
+  <div class="scene-box">
+    <canvas id="simpCanvas" style="height:280px;"></canvas>
+    <div class="scene-controls">
+      <label>Vol: <input type="range" id="volSlider" min="20" max="70" value="40" style="width:80px;"> <span id="volVal">40%</span></label>
+      <label>Penalty p: <input type="range" id="penSlider" min="10" max="50" value="30" style="width:80px;"> <span id="penVal">3.0</span></label>
+      <button class="btn primary" id="btnStep">Step</button>
+      <button class="btn primary" id="btnRun">&#9654; Run</button>
+      <button class="btn" id="btnReset">Reset</button>
+    </div>
+    <div class="scene-controls" style="padding-top:0;border-top:none;">
+      <span id="iterLabel" style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);">iter: 0</span>
+      <span id="compLabel" style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);margin-left:20px;">compliance: --</span>
+    </div>
+    <div class="scene-caption">Blue = solid material, white = void. The optimizer redistributes density to minimize compliance at the given material budget.</div>
+  </div>
+</section>
+
+<!-- ====== SECTIONS 9-11 + END ====== -->
+<section id="s9">
+  <h2>9. Real systems: from research to industry</h2>
+  <p>
+    The 99-line SIMP we just built is the research baseline. Production tools extend it
+    in several critical directions:
+  </p>
+  <div class="comparison">
+    <div class="col">
+      <h4>// academic SIMP</h4>
+      <ul>
+        <li>2D structured mesh</li>
+        <li>Direct dense solver (numpy)</li>
+        <li>One load case</li>
+        <li>No manufacturing constraints</li>
+        <li>Sensitivity filter only</li>
+        <li>Cantilever or MBB beam tests</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h4>// production tools</h4>
+      <ul>
+        <li>3D tetrahedral meshes from CAD</li>
+        <li>Iterative multigrid solver (GPU)</li>
+        <li>Many load cases (fatigue, crash)</li>
+        <li>Overhang, symmetry, extrusion constraints</li>
+        <li>Heaviside projection for sharp boundaries</li>
+        <li>Full car bodies, aerospace brackets</li>
+      </ul>
+    </div>
+  </div>
+  <div class="concept-grid">
+    <div class="concept-card">
+      <div class="icon">&#9976;</div>
+      <h4>Altair OptiStruct</h4>
+      <p>The industry standard. Used by automotive OEMs (BMW, Ford, Toyota) for
+         chassis and bracket optimization. SIMP core with many manufacturing constraints.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">&#128736;</div>
+      <h4>nTopology</h4>
+      <p>Cloud-native implicit modeling + topology opt. Field-driven design means
+         you can apply different lattice densities based on stress fields.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">&#128190;</div>
+      <h4>Autodesk Fusion 360</h4>
+      <p>Generative design UI on top of topology opt. Accessible to mechanical
+         engineers without FEA expertise. Exports directly to CAM.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">&#128300;</div>
+      <h4>Research frontiers</h4>
+      <p>Level-set methods (sharp boundaries), BESO (evolutionary removal),
+         neural topology opt (NTopo), differentiable FEM (JAX-FEM).</p>
+    </div>
+  </div>
+</section>
+
+<section id="s10">
+  <h2>10. Historical context</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <span class="year">1904</span>
+      <h4>Michell Trusses</h4>
+      <p>A.G.M. Michell derives the theoretical minimum-weight truss layouts analytically. The resulting spiderweb-like patterns are still the benchmark for TO results 120 years later.</p>
+    </div>
+    <div class="timeline-item">
+      <span class="year">1988</span>
+      <h4>Bendsoe and Kikuchi</h4>
+      <p>First computational topology optimization using homogenization -- treating cells as microstructured composites. Works but slow; needs design interpretation step.</p>
+    </div>
+    <div class="timeline-item">
+      <span class="year">1999</span>
+      <h4>SIMP -- Bendsoe and Sigmund</h4>
+      <p>The power-law material model (solid isotropic material with penalization). Simple, fast, provably convergent. Becomes the dominant method overnight.</p>
+    </div>
+    <div class="timeline-item">
+      <span class="year">2001</span>
+      <h4>Sigmund 99-line code</h4>
+      <p>Ole Sigmund publishes a complete SIMP implementation in 99 lines of MATLAB. It is downloaded millions of times and becomes the de-facto tutorial entry point worldwide.</p>
+    </div>
+    <div class="timeline-item">
+      <span class="year">2010</span>
+      <h4>Level-set methods mature</h4>
+      <p>Allaire, Jouve, Toader et al. develop level-set topology optimization. Produces smooth, CAD-ready boundaries -- critical for additive manufacturing workflows.</p>
+    </div>
+    <div class="timeline-item">
+      <span class="year">2018</span>
+      <h4>GPU-accelerated TO</h4>
+      <p>Large-scale problems (100M+ elements) become tractable on GPU via matrix-free conjugate gradient solvers with multigrid preconditioning. Real car bodies in hours.</p>
+    </div>
+    <div class="timeline-item">
+      <span class="year">2023+</span>
+      <h4>Neural topology optimization</h4>
+      <p>Networks trained on thousands of SIMP solutions can predict near-optimal layouts in milliseconds. NTopo, TopoDiff, and similar models enable real-time design exploration.</p>
+    </div>
+  </div>
+</section>
+
+<section id="s11">
+  <h2>11. Hands-on Colab notebook</h2>
+  <p>
+    The companion notebook builds the full SIMP solver from scratch in NumPy --
+    no FEA library, no external optimizer. You will implement the 8x4 cantilever,
+    then scale to 60x30, visualize convergence, and experiment with different
+    boundary conditions.
+  </p>
+  <a class="nb-colab"
+     href="https://colab.research.google.com/github/ChenChihYuan/geo-instructor/blob/main/posts/topology-optimization/notebooks/01_simp_topology_opt.ipynb"
+     target="_blank" rel="noopener">
+    &#9654; Open in Colab -- SIMP from scratch
+  </a>
+  <div class="callout" style="margin-top:24px;">
+    <div class="callout-title pixel-label">WHAT YOU WILL BUILD</div>
+    <ul style="margin-top:8px;padding-left:18px;font-size:0.9rem;">
+      <li>Bilinear quad element stiffness matrix (KE) from scratch</li>
+      <li>Global assembly loop with SIMP penalization</li>
+      <li>Direct solver + sensitivity computation</li>
+      <li>Sensitivity filter with precomputed neighbor weights</li>
+      <li>OC bisection update with move limit</li>
+      <li>Convergence plot and animated density evolution</li>
+      <li>Extension: MBB beam, multi-load, overhang constraint</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Further reading</h2>
+  <ul style="font-size:0.9rem;line-height:2;">
+    <li>Sigmund (2001) -- A 99 line topology optimization code written in Matlab. <em>Structural and Multidisciplinary Optimization</em> 21(2).</li>
+    <li>Andreassen et al. (2011) -- Efficient topology optimization in MATLAB using 88 lines of code. <em>SeMO</em> 43(1).</li>
+    <li>Bendsoe and Sigmund (2004) -- <em>Topology Optimization: Theory, Methods and Applications.</em> Springer.</li>
+    <li>Wang et al. (2011) -- A level set method for structural topology optimization. <em>Comput. Methods Appl. Mech. Engrg.</em></li>
+    <li>Lazarov and Sigmund (2016) -- Filters in topology optimization based on Helmholtz-type differential equations. <em>IJNME</em>.</li>
+  </ul>
+</section>
+
+</article>
+
+
+<script>
+// ===== SIMP ENGINE =====
+// Pure JS implementation of Sigmund's 99-line SIMP
+// Cantilever: left edge fixed, point load at mid-right
+
+function buildSIMP(NELX, NELY, VOLFRAC, PENAL, RMIN) {
+  var NEL  = NELX * NELY;
+  var NDOF = 2 * (NELX + 1) * (NELY + 1);
+  var E0 = 1.0, EMIN = 1e-3, NU = 0.3;
+
+  // Element stiffness matrix KE (8x8, Sigmund formula)
+  var nu = NU;
+  var k = [0.5 - nu/6, 0.125 + nu/8, -0.25 - nu/12, -0.125 + 3*nu/8,
+           -0.25 + nu/12, -0.125 - nu/8, nu/6, 0.125 - 3*nu/8];
+  var KE_rows = [
+    [k[0],k[1],k[2],k[3],k[4],k[5],k[6],k[7]],
+    [k[1],k[0],k[7],k[6],k[5],k[4],k[3],k[2]],
+    [k[2],k[7],k[0],k[5],k[6],k[3],k[4],k[1]],
+    [k[3],k[6],k[5],k[0],k[7],k[2],k[1],k[4]],
+    [k[4],k[5],k[6],k[7],k[0],k[1],k[2],k[3]],
+    [k[5],k[4],k[3],k[2],k[1],k[0],k[7],k[6]],
+    [k[6],k[3],k[4],k[1],k[2],k[7],k[0],k[5]],
+    [k[7],k[2],k[1],k[4],k[3],k[6],k[5],k[0]]
+  ];
+  var fac = 1.0 / (1 - nu * nu);
+  for (var i = 0; i < 8; i++) for (var j = 0; j < 8; j++) KE_rows[i][j] *= fac;
+
+  // DOF mapping for element (elx, ely)
+  function edofs(elx, ely) {
+    var nTL = (NELY+1)*elx + ely;
+    var nTR = (NELY+1)*(elx+1) + ely;
+    var nBR = (NELY+1)*(elx+1) + ely+1;
+    var nBL = (NELY+1)*elx + ely+1;
+    return [2*nTL,2*nTL+1,2*nTR,2*nTR+1,2*nBR,2*nBR+1,2*nBL,2*nBL+1];
+  }
+
+  // Precompute all element DOF arrays
+  var EDOFS = new Array(NEL);
+  for (var ely = 0; ely < NELY; ely++)
+    for (var elx = 0; elx < NELX; elx++)
+      EDOFS[ely * NELX + elx] = edofs(elx, ely);
+
+  // Fixed DOFs: left edge (all nodes ely=0..NELY on elx=0 side => node col 0)
+  var fixedSet = new Set();
+  for (var ely2 = 0; ely2 <= NELY; ely2++) {
+    fixedSet.add(2 * ely2);
+    fixedSet.add(2 * ely2 + 1);
+  }
+
+  // Load DOF: mid-right, downward (+y)
+  var loadNode = (NELY+1)*NELX + Math.floor(NELY/2);
+  var loadDOF  = 2 * loadNode + 1;
+
+  // Precompute sensitivity filter
+  var H = new Array(NEL);
+  var Hs = new Float64Array(NEL);
+  for (var ely3 = 0; ely3 < NELY; ely3++) {
+    for (var elx3 = 0; elx3 < NELX; elx3++) {
+      var el = ely3 * NELX + elx3;
+      H[el] = [];
+      for (var ely4 = Math.max(0, ely3-Math.ceil(RMIN)-1); ely4 < Math.min(NELY, ely3+Math.ceil(RMIN)+1); ely4++) {
+        for (var elx4 = Math.max(0, elx3-Math.ceil(RMIN)-1); elx4 < Math.min(NELX, elx3+Math.ceil(RMIN)+1); elx4++) {
+          var dist = Math.sqrt((elx4-elx3)*(elx4-elx3) + (ely4-ely3)*(ely4-ely3));
+          var w = Math.max(0, RMIN - dist);
+          if (w > 0) {
+            H[el].push([ely4 * NELX + elx4, w]);
+            Hs[el] += w;
+          }
+        }
+      }
+    }
+  }
+
+  // State
+  var x = new Float64Array(NEL).fill(VOLFRAC);
+  var iter = 0;
+  var lastCompliance = 0;
+
+  function solve() {
+    // Assemble K (dense -- fine for ~1000 DOF)
+    var K = new Float64Array(NDOF * NDOF);
+    var F = new Float64Array(NDOF);
+    F[loadDOF] = 1.0;
+
+    for (var e = 0; e < NEL; e++) {
+      var rho = x[e];
+      var ke_s = EMIN + Math.pow(rho, PENAL) * (E0 - EMIN);
+      var d = EDOFS[e];
+      for (var ii = 0; ii < 8; ii++)
+        for (var jj = 0; jj < 8; jj++)
+          K[d[ii] * NDOF + d[jj]] += ke_s * KE_rows[ii][jj];
+    }
+
+    // Apply BCs
+    fixedSet.forEach(function(fd) {
+      for (var c = 0; c < NDOF; c++) { K[fd * NDOF + c] = 0; K[c * NDOF + fd] = 0; }
+      K[fd * NDOF + fd] = 1;
+      F[fd] = 0;
+    });
+
+    // Solve K u = F (Gaussian elimination -- only safe for small NDOF)
+    var u = gaussSolve(K, F, NDOF);
+    return u;
+  }
+
+  function gaussSolve(K, F, n) {
+    // In-place Gaussian elimination with partial pivoting
+    var A = K.slice();
+    var b = F.slice();
+    for (var col = 0; col < n; col++) {
+      // find pivot
+      var maxVal = Math.abs(A[col*n+col]), maxRow = col;
+      for (var r = col+1; r < n; r++) {
+        if (Math.abs(A[r*n+col]) > maxVal) { maxVal = Math.abs(A[r*n+col]); maxRow = r; }
+      }
+      if (maxRow !== col) {
+        for (var c2 = 0; c2 < n; c2++) {
+          var tmp = A[col*n+c2]; A[col*n+c2] = A[maxRow*n+c2]; A[maxRow*n+c2] = tmp;
+        }
+        var tmp2 = b[col]; b[col] = b[maxRow]; b[maxRow] = tmp2;
+      }
+      var pivot = A[col*n+col];
+      if (Math.abs(pivot) < 1e-14) continue;
+      for (var row = col+1; row < n; row++) {
+        var fac2 = A[row*n+col] / pivot;
+        for (var c3 = col; c3 < n; c3++) A[row*n+c3] -= fac2 * A[col*n+c3];
+        b[row] -= fac2 * b[col];
+      }
+    }
+    // back-substitution
+    var u = new Float64Array(n);
+    for (var i = n-1; i >= 0; i--) {
+      var sum = b[i];
+      for (var j = i+1; j < n; j++) sum -= A[i*n+j] * u[j];
+      u[i] = (Math.abs(A[i*n+i]) > 1e-14) ? sum / A[i*n+i] : 0;
+    }
+    return u;
+  }
+
+  function step() {
+    var u = solve();
+
+    // Compliance + raw sensitivities
+    var compliance = 0;
+    var dc = new Float64Array(NEL);
+    for (var e = 0; e < NEL; e++) {
+      var d = EDOFS[e];
+      var uKu = 0;
+      for (var ii = 0; ii < 8; ii++) for (var jj = 0; jj < 8; jj++) uKu += u[d[ii]] * KE_rows[ii][jj] * u[d[jj]];
+      compliance += Math.pow(x[e], PENAL) * uKu;
+      dc[e] = -PENAL * Math.pow(Math.max(x[e], 1e-10), PENAL-1) * uKu;
+    }
+    lastCompliance = compliance;
+
+    // Filter sensitivities
+    var dcf = new Float64Array(NEL);
+    for (var e2 = 0; e2 < NEL; e2++) {
+      var num = 0;
+      var nbrs = H[e2];
+      for (var k2 = 0; k2 < nbrs.length; k2++) {
+        var f = nbrs[k2][0], w = nbrs[k2][1];
+        num += w * x[f] * Math.abs(dc[f]);
+      }
+      dcf[e2] = -num / (Math.max(x[e2], 0.001) * Hs[e2]);
+    }
+
+    // OC update with bisection on lambda
+    var dv = new Float64Array(NEL).fill(1);
+    var l1 = 0, l2 = 1e9, move = 0.2;
+    var xnew = new Float64Array(NEL);
+    while ((l2 - l1) / (l1 + l2 + 1e-30) > 1e-4) {
+      var lm = 0.5 * (l1 + l2);
+      var vol = 0;
+      for (var e3 = 0; e3 < NEL; e3++) {
+        var B = Math.sqrt(Math.max(-dcf[e3], 0) / (dv[e3] * lm));
+        var xc = x[e3] * B;
+        xc = Math.min(x[e3] + move, Math.min(1.0, Math.max(x[e3] - move, Math.max(0.001, xc))));
+        xnew[e3] = xc;
+        vol += xc;
+      }
+      if (vol > VOLFRAC * NEL) l1 = lm; else l2 = lm;
+    }
+
+    x = xnew;
+    iter++;
+    return { compliance: compliance, iter: iter };
+  }
+
+  function reset(vf, p) {
+    VOLFRAC = vf; PENAL = p;
+    x = new Float64Array(NEL).fill(VOLFRAC);
+    iter = 0; lastCompliance = 0;
+  }
+
+  return { step: step, reset: reset, get x() { return x; }, get iter() { return iter; },
+           NEL: NEL, NELX: NELX, NELY: NELY };
+}
+
+// ===== CANVAS RENDERER =====
+function drawSIMP(canvas, simp) {
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  var cw = W / simp.NELX, ch = H / simp.NELY;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#F4F2F0';
+  ctx.fillRect(0, 0, W, H);
+  var x = simp.x;
+  for (var ely = 0; ely < simp.NELY; ely++) {
+    for (var elx = 0; elx < simp.NELX; elx++) {
+      var rho = x[ely * simp.NELX + elx];
+      var bright = Math.round((1 - rho) * 255);
+      ctx.fillStyle = 'rgb(' + bright + ',' + bright + ',' + Math.round(bright + rho * 40) + ')';
+      ctx.fillRect(elx * cw, ely * ch, cw + 0.5, ch + 0.5);
+    }
+  }
+  // fixed edge marker
+  ctx.strokeStyle = '#8A857E';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(1, 0); ctx.lineTo(1, H); ctx.stroke();
+  // load arrow
+  var midY = Math.floor(simp.NELY / 2) * ch + ch/2;
+  ctx.strokeStyle = '#C0392B'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W-8, midY-14); ctx.lineTo(W-8, midY+8); ctx.stroke();
+  ctx.fillStyle = '#C0392B';
+  ctx.beginPath(); ctx.moveTo(W-14, midY+3); ctx.lineTo(W-2, midY+3); ctx.lineTo(W-8, midY+14); ctx.closePath(); ctx.fill();
+}
+
+// ===== MAIN DEMO =====
+(function() {
+  var NELX = 40, NELY = 20;
+  var canvas = document.getElementById('simpCanvas');
+  if (!canvas) return;
+  var box = canvas.parentElement;
+  var W = box.clientWidth || 700;
+  canvas.width = W; canvas.height = 280;
+  var dpr = window.devicePixelRatio || 1;
+
+  var vf = 0.4, pen = 3.0, rmin = 1.5;
+  var simp = buildSIMP(NELX, NELY, vf, pen, rmin);
+  drawSIMP(canvas, simp);
+
+  var running = false, timer = null;
+
+  function doStep() {
+    var res = simp.step();
+    drawSIMP(canvas, simp);
+    document.getElementById('iterLabel').textContent = 'iter: ' + res.iter;
+    document.getElementById('compLabel').textContent = 'compliance: ' + res.compliance.toFixed(2);
+    if (running && res.iter >= 80) { running = false; clearInterval(timer); }
+  }
+
+  document.getElementById('btnStep').addEventListener('click', function() {
+    if (running) { running = false; clearInterval(timer); }
+    doStep();
+  });
+
+  document.getElementById('btnRun').addEventListener('click', function() {
+    if (running) { running = false; clearInterval(timer); this.textContent = '\u25b6 Run'; return; }
+    running = true; this.textContent = '\u23f8 Pause';
+    timer = setInterval(doStep, 120);
+  });
+
+  document.getElementById('btnReset').addEventListener('click', function() {
+    running = false; clearInterval(timer);
+    document.getElementById('btnRun').textContent = '\u25b6 Run';
+    vf  = parseInt(document.getElementById('volSlider').value) / 100;
+    pen = parseInt(document.getElementById('penSlider').value) / 10;
+    simp.reset(vf, pen);
+    drawSIMP(canvas, simp);
+    document.getElementById('iterLabel').textContent = 'iter: 0';
+    document.getElementById('compLabel').textContent = 'compliance: --';
+  });
+
+  document.getElementById('volSlider').addEventListener('input', function() {
+    document.getElementById('volVal').textContent = this.value + '%';
+  });
+  document.getElementById('penSlider').addEventListener('input', function() {
+    document.getElementById('penVal').textContent = (parseInt(this.value)/10).toFixed(1);
+  });
+
+  window.addEventListener('resize', function() {
+    canvas.width = box.clientWidth; canvas.height = 280;
+    drawSIMP(canvas, simp);
+  });
+})();
+
+// ===== HERO CANVAS (animated density evolution, tiny grid) =====
+(function() {
+  var canvas = document.getElementById('heroCanvas');
+  if (!canvas) return;
+  var box = canvas.parentElement;
+  canvas.width = box.clientWidth || 700;
+  canvas.height = 220;
+  var NELX = 30, NELY = 12;
+  var simp = buildSIMP(NELX, NELY, 0.45, 3, 1.5);
+  var stepCount = 0;
+  function heroFrame() {
+    if (stepCount < 60) { simp.step(); stepCount++; }
+    drawSIMP(canvas, simp);
+    requestAnimationFrame(heroFrame);
+  }
+  heroFrame();
+  window.addEventListener('resize', function() {
+    canvas.width = box.clientWidth; canvas.height = 220;
+  });
+})();
+</script>
+
+
+</div>
+</body>
+</html>
